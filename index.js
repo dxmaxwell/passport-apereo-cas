@@ -8,7 +8,7 @@ var _ = require('underscore'),
     parseString = require('xml2js').parseString,
     processors = require('xml2js/lib/processors'),
     passport = require('passport'),
-    uuid = require('node-uuid'),
+    uuidv4 = require('uuid/v4'),
     util = require('util');
 
 function Strategy(options, verify) {
@@ -197,7 +197,7 @@ Strategy.prototype.authenticate = function (req, options) {
     };
 
     if (this.useSaml) {
-        var requestId = uuid.v4();
+        var requestId = uuidv4();
         var issueInstant = new Date().toISOString();
         var soapEnvelope = util.format('<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/"><SOAP-ENV:Header/><SOAP-ENV:Body><samlp:Request xmlns:samlp="urn:oasis:names:tc:SAML:1.0:protocol" MajorVersion="1" MinorVersion="1" RequestID="%s" IssueInstant="%s"><samlp:AssertionArtifact>%s</samlp:AssertionArtifact></samlp:Request></SOAP-ENV:Body></SOAP-ENV:Envelope>', requestId, issueInstant, ticket);
         var request = this.client.request({
