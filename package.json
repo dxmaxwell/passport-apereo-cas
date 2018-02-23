@@ -1,24 +1,24 @@
 {
-  "name": "passport-cas",
-  "version": "0.1.1",
+  "name": "@jcu/passport-cas",
+  "version": "0.1.2",
   "description": "Cas authentication strategies for Passport.",
   "main": "index.js",
   "scripts": {},
   "repository": {
     "type": "git",
-    "url": "git@github.com:sadne/passport-cas.git"
+    "url": "git@github.com:jcu-eresearch/passport-cas.git"
   },
   "keywords": [
     "passport",
     "auth",
     "cas"
   ],
-  "author": "不会飞的羊",
+  "author": "JCU eResearch Centre",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/sadne/passport-cas/issues"
+    "url": "https://github.com/jcu-eresearch/passport-cas/issues"
   },
-  "homepage": "https://github.com/sadne/passport-cas",
+  "homepage": "https://github.com/jcu-eresearch/passport-cas",
   "dependencies": {
     "node-uuid": "^1.4.8",
     "underscore": "^1.8.3",
