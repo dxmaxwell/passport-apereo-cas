@@ -1,7 +1,9 @@
 # passport-cas
 
-Cas authentication strategies for Passport.
+CAS authentication strategies for Passport.
 
+Originally developed at <https://github.com/sadne/passport-cas>. This fork
+replaces deprecated Express syntax and upgrades depedencies.
 
 ## Install
 
