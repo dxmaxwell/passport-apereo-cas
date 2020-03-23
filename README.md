@@ -1,17 +1,22 @@
-# passport-cas
+# passport-apero-cas
 
 CAS authentication strategies for Passport.
 
-Originally developed at <https://github.com/sadne/passport-cas>. This fork
-replaces deprecated Express syntax and upgrades depedencies.
+Originally developed at <https://github.com/sadne/passport-cas>. 
+
+Development continued by <https://github.com/jcu-eresearch/passport-cas.git>
+to replace deprecated Express syntax and upgrade depedencies.
+
+This repository improves over those projects by converting to TypeScript, 
+and adding support for HTTP proxy configuration via http_proxy environment variable.
 
 ## Install
 
-    $ npm install passport-cas
+    $ npm install passport-apereo-cas
 
 #### Configure Strategy
 
-    passport.use(new (require('passport-cas').Strategy)({
+    passport.use(new (require('passport-apereo-cas').Strategy)({
       ssoBaseURL: 'http://www.example.com/',
       serverBaseURL: 'http://localhost:3000'
     }, function(login, done) {

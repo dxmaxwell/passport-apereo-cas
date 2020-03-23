@@ -1,8 +1,16 @@
-"use strict";
 /**
  * Cas
  */
-var _ = require('underscore'), url = require('url'), http = require('http'), https = require('https'), parseString = require('xml2js').parseString, processors = require('xml2js/lib/processors'), passport = require('passport'), uuidv4 = require('uuid/v4'), util = require('util');
+var _ = require('underscore'),
+    url = require('url'),
+    http = require('http'),
+    https = require('https'),
+    parseString = require('xml2js').parseString,
+    processors = require('xml2js/lib/processors'),
+    passport = require('passport'),
+    uuidv4 = require('uuid/v4'),
+    util = require('util');
+
 function Strategy(options, verify) {
     if (typeof options == 'function') {
         verify = options;
@@ -20,20 +28,24 @@ function Strategy(options, verify) {
     this.parsed = url.parse(this.ssoBase);
     if (this.parsed.protocol === 'http:') {
         this.client = http;
-    }
-    else {
+    } else {
         this.client = https;
     }
+
     passport.Strategy.call(this);
+
+
     this.name = 'cas';
     this._verify = verify;
     this._passReqToCallback = options.passReqToCallback;
+
     var xmlParseOpts = {
         'trim': true,
         'normalize': true,
         'explicitArray': false,
         'tagNameProcessors': [processors.normalize, processors.stripPrefix]
     };
+
     var self = this;
     switch (this.version) {
         case "CAS1.0":
@@ -43,12 +55,10 @@ function Strategy(options, verify) {
                 if (lines.length >= 1) {
                     if (lines[0] === 'no') {
                         return verified(new Error('Authentication failed'));
-                    }
-                    else if (lines[0] === 'yes' && lines.length >= 2) {
+                    } else if (lines[0] === 'yes' && lines.length >= 2) {
                         if (self._passReqToCallback) {
                             self._verify(req, lines[1], verified);
-                        }
-                        else {
+                        } else {
                             self._verify(lines[1], verified);
                         }
                         return;
@@ -70,7 +80,7 @@ function Strategy(options, verify) {
                             var success = response.status.statuscode['$'].Value.match(/Success$/);
                             if (success) {
                                 var attributes = {};
-                                _.each(response.assertion.attributestatement.attribute, function (attribute) {
+                                _.each(response.assertion.attributestatement.attribute, function(attribute) {
                                     attributes[attribute['$'].AttributeName.toLowerCase()] = attribute.attributevalue;
                                 });
                                 var profile = {
@@ -79,21 +89,18 @@ function Strategy(options, verify) {
                                 };
                                 if (self._passReqToCallback) {
                                     self._verify(req, profile, verified);
-                                }
-                                else {
+                                } else {
                                     self._verify(profile, verified);
                                 }
                                 return;
                             }
                             return verified(new Error('Authentication failed'));
-                        }
-                        catch (e) {
+                        } catch (e) {
                             return verified(new Error('Authentication failed'));
                         }
                     });
                 };
-            }
-            else {
+            } else {
                 this._validateUri = "/p3/serviceValidate";
                 this._validate = function (req, body, verified) {
                     parseString(body, xmlParseOpts, function (err, result) {
@@ -108,15 +115,14 @@ function Strategy(options, verify) {
                             if (success) {
                                 if (self._passReqToCallback) {
                                     self._verify(req, success, verified);
-                                }
-                                else {
+                                } else {
                                     self._verify(success, verified);
                                 }
                                 return;
                             }
                             return verified(new Error('Authentication failed'));
-                        }
-                        catch (e) {
+
+                        } catch (e) {
                             return verified(new Error('Authentication failed'));
                         }
                     });
@@ -127,7 +133,8 @@ function Strategy(options, verify) {
             throw new Error('unsupported version ' + this.version);
     }
 }
-Strategy.prototype.service = function (req) {
+
+Strategy.prototype.service = function(req) {
     var serviceURL = this.serviceURL || req.originalUrl;
     var resolvedURL = url.resolve(this.serverBaseURL, serviceURL);
     var parsedURL = url.parse(resolvedURL, true);
@@ -135,8 +142,10 @@ Strategy.prototype.service = function (req) {
     delete parsedURL.search;
     return url.format(parsedURL);
 };
+
 Strategy.prototype.authenticate = function (req, options) {
     options = options || {};
+
     // CAS Logout flow as described in
     // https://wiki.jasig.org/display/CAS/Proposal%3A+Front-Channel+Single+Sign-Out var relayState = req.query.RelayState;
     var relayState = req.query.RelayState;
@@ -146,13 +155,16 @@ Strategy.prototype.authenticate = function (req, options) {
         return this.redirect(this.ssoBase + '/logout?_eventId=next&RelayState=' +
             relayState);
     }
+
     var service = this.service(req);
+
     var ticket = req.query.ticket;
     if (!ticket) {
         var redirectURL = url.parse(this.ssoBase + '/login', true);
+
         redirectURL.query.service = service;
         // copy loginParams in login query
-        for (var property in options.loginParams) {
+        for (var property in options.loginParams ) {
             var loginParam = options.loginParams[property];
             if (loginParam) {
                 redirectURL.query[property] = loginParam;
@@ -160,6 +172,7 @@ Strategy.prototype.authenticate = function (req, options) {
         }
         return this.redirect(url.format(redirectURL));
     }
+
     var self = this;
     var verified = function (err, user, info) {
         if (err) {
@@ -171,6 +184,7 @@ Strategy.prototype.authenticate = function (req, options) {
         self.success(user, info);
     };
     var _validateUri = this.validateURL || this._validateUri;
+
     var _handleResponse = function (response) {
         response.setEncoding('utf8');
         var body = '';
@@ -181,6 +195,7 @@ Strategy.prototype.authenticate = function (req, options) {
             return self._validate(req, body, verified);
         });
     };
+
     if (this.useSaml) {
         var requestId = uuidv4();
         var issueInstant = new Date().toISOString();
@@ -196,13 +211,13 @@ Strategy.prototype.authenticate = function (req, options) {
                 }
             })
         }, _handleResponse);
+
         request.on('error', function (e) {
             return self.fail(new Error(e));
         });
         request.write(soapEnvelope);
         request.end();
-    }
-    else {
+    } else {
         var get = this.client.get({
             host: this.parsed.hostname,
             port: this.parsed.port,
@@ -214,9 +229,12 @@ Strategy.prototype.authenticate = function (req, options) {
                 }
             })
         }, _handleResponse);
+
         get.on('error', function (e) {
             return self.fail(new Error(e));
         });
     }
 };
+
+
 exports.Strategy = Strategy;

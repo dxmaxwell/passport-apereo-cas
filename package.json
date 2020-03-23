@@ -1,9 +1,11 @@
 {
-  "name": "@jcu/passport-cas",
-  "version": "0.1.2",
-  "description": "Cas authentication strategies for Passport.",
+  "name": "passport-apereo-cas",
+  "version": "0.2.0-DEV",
+  "description": "Apereo CAS authentication strategies for Passport.",
   "main": "index.js",
-  "scripts": {},
+  "scripts": {
+    "build": "tsc --strict --allowJs --declaration --outFile index.js ./src/index.js"
+  },
   "repository": {
     "type": "git",
     "url": "git@github.com:jcu-eresearch/passport-cas.git"
@@ -16,9 +18,9 @@
   "author": "JCU eResearch Centre",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/jcu-eresearch/passport-cas/issues"
+    "url": "https://github.com/dylan171/passport-apereo-cas/issues"
   },
-  "homepage": "https://github.com/jcu-eresearch/passport-cas",
+  "homepage": "https://github.com/dylan171/passport-apereo-cas",
   "dependencies": {
     "underscore": "^1.8.3",
     "uuid": "^3.2.1",
@@ -26,5 +28,8 @@
   },
   "peerDependencies": {
     "passport": "^0.4.0"
+  },
+  "devDependencies": {
+    "typescript": "^3.8.3"
   }
 }
