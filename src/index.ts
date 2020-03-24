@@ -8,7 +8,6 @@ import * as util from 'util';
 
 import * as express from 'express';
 import * as passport from 'passport';
-import * as _ from 'underscore';
 import { v4 as uuidv4 } from 'uuid';
 import * as xml2js from 'xml2js';
 
@@ -171,9 +170,11 @@ export class Strategy extends passport.Strategy {
                                 var success = response.status.statuscode['$'].Value.match(/Success$/);
                                 if (success) {
                                     var attributes: { [key: string]: object } = {};
-                                    _.each(response.assertion.attributestatement.attribute, (attribute) => {
-                                        attributes[attribute['$'].AttributeName.toLowerCase()] = attribute.attributevalue;
-                                    });
+                                    if (Array.isArray(response.assertion.attributestatement.attribute)) {
+                                        for (const attribute of response.assertion.attributestatement.attribute) {
+                                            attributes[attribute['$'].AttributeName.toLowerCase()] = attribute.attributevalue;
+                                        };
+                                    }
                                     var profile = {
                                         'user': response.assertion.authenticationstatement.subject.nameidentifier,
                                         'attributes': attributes

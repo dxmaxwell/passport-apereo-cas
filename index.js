@@ -8,7 +8,6 @@ const http = require("http");
 const https = require("https");
 const util = require("util");
 const passport = require("passport");
-const _ = require("underscore");
 const uuid_1 = require("uuid");
 const xml2js = require("xml2js");
 class Strategy extends passport.Strategy {
@@ -76,9 +75,12 @@ class Strategy extends passport.Strategy {
                                 var success = response.status.statuscode['$'].Value.match(/Success$/);
                                 if (success) {
                                     var attributes = {};
-                                    _.each(response.assertion.attributestatement.attribute, (attribute) => {
-                                        attributes[attribute['$'].AttributeName.toLowerCase()] = attribute.attributevalue;
-                                    });
+                                    if (Array.isArray(response.assertion.attributestatement.attribute)) {
+                                        for (const attribute of response.assertion.attributestatement.attribute) {
+                                            attributes[attribute['$'].AttributeName.toLowerCase()] = attribute.attributevalue;
+                                        }
+                                        ;
+                                    }
                                     var profile = {
                                         'user': response.assertion.authenticationstatement.subject.nameidentifier,
                                         'attributes': attributes
