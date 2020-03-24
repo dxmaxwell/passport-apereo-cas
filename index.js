@@ -4,9 +4,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
  * Apereo CAS Protocol Client (https://apereo.github.io/cas/6.1.x/protocol/CAS-Protocol.html)
  */
 const url = require("url");
-const http = require("http");
-const https = require("https");
-const util = require("util");
+const axios = require("axios");
 const passport = require("passport");
 const uuid_1 = require("uuid");
 const xml2js = require("xml2js");
@@ -20,12 +18,7 @@ class Strategy extends passport.Strategy {
         this.serviceURL = options.serviceURL;
         this.useSaml = options.useSaml || false;
         this.parsed = url.parse(this.ssoBase);
-        if (this.parsed.protocol === 'http:') {
-            this.client = http;
-        }
-        else {
-            this.client = https;
-        }
+        this._client = axios.default.create(options.agentOptions);
         this.name = 'cas';
         this._verify = verify;
         this._passReqToCallback = options.passReqToCallback || false;
@@ -190,52 +183,40 @@ class Strategy extends passport.Strategy {
         };
         const _validateUri = this.validateURL || this._validateUri;
         const _handleResponse = (response) => {
-            response.setEncoding('utf8');
-            let body = '';
-            response.on('data', (chunk) => {
-                body += chunk;
-                return;
-            });
-            return response.on('end', () => {
-                this._validate(req, body, verified);
-                return;
-            });
+            this._validate(req, response.data, verified);
+            return;
         };
         if (this.useSaml) {
-            const requestId = uuid_1.v4();
-            const issueInstant = new Date().toISOString();
-            const soapEnvelope = util.format('<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/"><SOAP-ENV:Header/><SOAP-ENV:Body><samlp:Request xmlns:samlp="urn:oasis:names:tc:SAML:1.0:protocol" MajorVersion="1" MinorVersion="1" RequestID="%s" IssueInstant="%s"><samlp:AssertionArtifact>%s</samlp:AssertionArtifact></samlp:Request></SOAP-ENV:Body></SOAP-ENV:Envelope>', requestId, issueInstant, ticket);
-            const request = this.client.request({
-                host: this.parsed.hostname,
-                port: this.parsed.port,
-                method: 'POST',
-                path: url.format({
-                    pathname: this.parsed.pathname + _validateUri,
-                    query: {
-                        'TARGET': service
-                    }
-                })
-            }, _handleResponse);
-            request.on('error', (e) => {
+            const soapEnvelope = `<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/"><SOAP-ENV:Header/><SOAP-ENV:Body><samlp:Request xmlns:samlp="urn:oasis:names:tc:SAML:1.0:protocol" MajorVersion="1" MinorVersion="1" RequestID="${uuid_1.v4()}" IssueInstant="${new Date().toISOString()}"><samlp:AssertionArtifact>${ticket}</samlp:AssertionArtifact></samlp:Request></SOAP-ENV:Body></SOAP-ENV:Envelope>`;
+            this._client.post(this.ssoBase + _validateUri, soapEnvelope, {
+                params: {
+                    TARGET: service,
+                },
+                headers: {
+                    'Content-Type': 'application/xml',
+                    'Accept': 'application/xml',
+                    'Accept-Charset': 'utf-8',
+                },
+                responseType: 'text',
+            })
+                .then(_handleResponse).catch((e) => {
                 this.fail(String(e));
                 return;
             });
-            request.write(soapEnvelope);
-            request.end();
         }
         else {
-            const get = this.client.get({
-                host: this.parsed.hostname,
-                port: this.parsed.port,
-                path: url.format({
-                    pathname: this.parsed.pathname + _validateUri,
-                    query: {
-                        ticket: ticket,
-                        service: service
-                    }
-                })
-            }, _handleResponse);
-            get.on('error', (e) => {
+            this._client.get(this.ssoBase + _validateUri, {
+                params: {
+                    ticket: ticket,
+                    service: service,
+                },
+                headers: {
+                    'Accept': 'application/xml',
+                    'Accept-Charset': 'utf-8',
+                },
+                responseType: 'text',
+            })
+                .then(_handleResponse).catch((e) => {
                 this.fail(String(e));
                 return;
             });

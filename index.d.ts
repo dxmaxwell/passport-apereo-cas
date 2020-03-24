@@ -14,6 +14,7 @@ export interface StrategyOptions {
     validateURL?: string;
     useSaml?: boolean;
     passReqToCallback?: boolean;
+    agentOptions?: any;
 }
 export interface AuthenticateOptions extends passport.AuthenticateOptions {
     loginParams?: {
@@ -40,7 +41,7 @@ export declare class Strategy extends passport.Strategy {
     serviceURL?: string;
     useSaml: boolean;
     parsed: url.UrlObject;
-    client: any;
+    private _client;
     private _verify;
     private _validate;
     private _validateUri;
