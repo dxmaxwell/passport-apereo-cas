@@ -1,23 +1,51 @@
-declare module "index" {
-    export var Strategy: typeof Strategy;
-    function Strategy(options: any, verify: any): void;
-    class Strategy {
-        constructor(options: any, verify: any);
-        version: any;
-        ssoBase: any;
-        serverBaseURL: any;
-        validateURL: any;
-        serviceURL: any;
-        useSaml: any;
-        parsed: any;
-        client: any;
-        name: string;
-        _verify: any;
-        _passReqToCallback: any;
-        _validateUri: string;
-        _validate: (req: any, body: any, verified: any) => any;
-        service(req: any): any;
-        authenticate(req: any, options: any): any;
-    }
-    export {};
+/// <reference types="node" />
+/**
+ * Apereo CAS Protocol Client (https://apereo.github.io/cas/6.1.x/protocol/CAS-Protocol.html)
+ */
+import * as url from 'url';
+import * as express from 'express';
+import * as passport from 'passport';
+export declare type VersionOptions = 'CAS1.0' | 'CAS2.0' | 'CAS3.0';
+export interface StrategyOptions {
+    version?: VersionOptions;
+    ssoBaseURL: string;
+    serverBaseURL: string;
+    serviceURL?: string;
+    validateURL?: string;
+    useSaml?: boolean;
+    passReqToCallback?: boolean;
+}
+export interface AuthenticateOptions extends passport.AuthenticateOptions {
+    loginParams?: {
+        [key: string]: string | string[];
+    };
+}
+export interface Profile {
+    user: string;
+    attributes?: {
+        [key: string]: any;
+    };
+}
+export declare type DoneCallback = (err: any, user?: any, info?: any) => void;
+export interface VerifyCallback {
+    (profile: string | Profile, done: DoneCallback): void;
+    (req: express.Request, profile: string | Profile, done: DoneCallback): void;
+}
+export declare class Strategy extends passport.Strategy {
+    name: string;
+    version: VersionOptions;
+    ssoBase: string;
+    serverBaseURL: string;
+    validateURL?: string;
+    serviceURL?: string;
+    useSaml: boolean;
+    parsed: url.UrlObject;
+    client: any;
+    private _verify;
+    private _validate;
+    private _validateUri;
+    private _passReqToCallback;
+    constructor(options: StrategyOptions, verify: VerifyCallback);
+    private service;
+    authenticate(req: express.Request, options?: AuthenticateOptions): void;
 }

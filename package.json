@@ -4,7 +4,7 @@
   "description": "Apereo CAS authentication strategies for Passport.",
   "main": "index.js",
   "scripts": {
-    "build": "tsc --strict --declaration --outFile index.js ./src/index.ts"
+    "build": "tsc --build tsconfig.json"
   },
   "repository": {
     "type": "git",
