@@ -13,12 +13,11 @@ class Strategy extends passport.Strategy {
         super();
         this.name = 'cas';
         this.version = options.version || 'CAS1.0';
-        this.ssoBase = options.ssoBaseURL;
-        this.serverBaseURL = options.serverBaseURL;
+        this.casBaseURL = new url.URL(options.casBaseURL).toString();
+        this.serviceBaseURL = new url.URL(options.serviceBaseURL).toString();
         this.validateURL = options.validateURL;
         this.serviceURL = options.serviceURL;
         this.useSaml = options.useSaml || false;
-        new url.URL(this.ssoBase); // validate base URL
         this._verify = verify;
         this._client = axios.default.create(options.agentOptions);
         this._passReqToCallback = options.passReqToCallback || false;
@@ -140,7 +139,7 @@ class Strategy extends passport.Strategy {
     }
     service(req) {
         const serviceURL = this.serviceURL || req.originalUrl;
-        const resolvedURL = new url.URL(serviceURL, this.serverBaseURL);
+        const resolvedURL = new url.URL(serviceURL, this.serviceBaseURL);
         resolvedURL.searchParams.delete('ticket');
         return resolvedURL.toString();
     }
@@ -153,7 +152,7 @@ class Strategy extends passport.Strategy {
         if (relayState) {
             // logout locally
             req.logout();
-            const redirectURL = new url.URL('/logout', this.ssoBase);
+            const redirectURL = new url.URL('/logout', this.casBaseURL);
             redirectURL.searchParams.append('_eventId', 'next');
             redirectURL.searchParams.append('RelayState', relayState);
             this.redirect(redirectURL.toString());
@@ -162,7 +161,7 @@ class Strategy extends passport.Strategy {
         const service = this.service(req);
         const ticket = req.query.ticket;
         if (!ticket) {
-            const redirectURL = new url.URL(this.ssoBase, '/login');
+            const redirectURL = new url.URL('/login', this.casBaseURL);
             redirectURL.searchParams.append('service', service);
             // copy loginParams in login query
             const loginParams = options.loginParams;
@@ -195,7 +194,7 @@ class Strategy extends passport.Strategy {
         };
         if (this.useSaml) {
             const soapEnvelope = `<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/"><SOAP-ENV:Header/><SOAP-ENV:Body><samlp:Request xmlns:samlp="urn:oasis:names:tc:SAML:1.0:protocol" MajorVersion="1" MinorVersion="1" RequestID="${uuid_1.v4()}" IssueInstant="${new Date().toISOString()}"><samlp:AssertionArtifact>${ticket}</samlp:AssertionArtifact></samlp:Request></SOAP-ENV:Body></SOAP-ENV:Envelope>`;
-            this._client.post(new url.URL(_validateUri, this.ssoBase).toString(), soapEnvelope, {
+            this._client.post(new url.URL(_validateUri, this.casBaseURL).toString(), soapEnvelope, {
                 params: {
                     TARGET: service,
                 },
@@ -212,7 +211,7 @@ class Strategy extends passport.Strategy {
             });
         }
         else {
-            this._client.get(new url.URL(_validateUri, this.ssoBase).toString(), {
+            this._client.get(new url.URL(_validateUri, this.casBaseURL).toString(), {
                 params: {
                     ticket: ticket,
                     service: service,
