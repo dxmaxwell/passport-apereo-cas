@@ -1,8 +1,3 @@
-/// <reference types="node" />
-/**
- * Apereo CAS Protocol Client (https://apereo.github.io/cas/6.1.x/protocol/CAS-Protocol.html)
- */
-import * as url from 'url';
 import * as express from 'express';
 import * as passport from 'passport';
 export declare type VersionOptions = 'CAS1.0' | 'CAS2.0' | 'CAS3.0';
@@ -18,7 +13,7 @@ export interface StrategyOptions {
 }
 export interface AuthenticateOptions extends passport.AuthenticateOptions {
     loginParams?: {
-        [key: string]: string | string[];
+        [key: string]: string | undefined;
     };
 }
 export interface Profile {
@@ -40,7 +35,6 @@ export declare class Strategy extends passport.Strategy {
     validateURL?: string;
     serviceURL?: string;
     useSaml: boolean;
-    parsed: url.UrlObject;
     private _client;
     private _verify;
     private _validate;

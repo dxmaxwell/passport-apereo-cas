@@ -11,16 +11,16 @@ const xml2js = require("xml2js");
 class Strategy extends passport.Strategy {
     constructor(options, verify) {
         super();
+        this.name = 'cas';
         this.version = options.version || "CAS1.0";
         this.ssoBase = options.ssoBaseURL;
         this.serverBaseURL = options.serverBaseURL;
         this.validateURL = options.validateURL;
         this.serviceURL = options.serviceURL;
         this.useSaml = options.useSaml || false;
-        this.parsed = url.parse(this.ssoBase);
-        this._client = axios.default.create(options.agentOptions);
-        this.name = 'cas';
+        new url.URL(this.ssoBase); // validate base URL
         this._verify = verify;
+        this._client = axios.default.create(options.agentOptions);
         this._passReqToCallback = options.passReqToCallback || false;
         const xmlParseOpts = {
             'trim': true,
@@ -140,11 +140,9 @@ class Strategy extends passport.Strategy {
     }
     service(req) {
         const serviceURL = this.serviceURL || req.originalUrl;
-        const resolvedURL = url.resolve(this.serverBaseURL, serviceURL);
-        const parsedURL = url.parse(resolvedURL, true);
-        delete parsedURL.query.ticket;
-        delete parsedURL.search;
-        return url.format(parsedURL);
+        const resolvedURL = new url.URL(serviceURL, this.serverBaseURL);
+        resolvedURL.searchParams.delete('ticket');
+        return resolvedURL.toString();
     }
     ;
     authenticate(req, options) {
@@ -155,21 +153,30 @@ class Strategy extends passport.Strategy {
         if (relayState) {
             // logout locally
             req.logout();
-            return this.redirect(`${this.ssoBase}/logout?_eventId=next&RelayState=${relayState}`);
+            const redirectURL = new url.URL('/logout', this.ssoBase);
+            redirectURL.searchParams.append('_eventId', 'next');
+            redirectURL.searchParams.append('RelayState', relayState);
+            this.redirect(redirectURL.toString());
+            return;
         }
         const service = this.service(req);
         const ticket = req.query.ticket;
         if (!ticket) {
-            const redirectURL = url.parse(`${this.ssoBase}/login`, true);
-            redirectURL.query.service = service;
+            const redirectURL = new url.URL(this.ssoBase, '/login');
+            redirectURL.searchParams.append('service', service);
             // copy loginParams in login query
-            for (const property in options.loginParams) {
-                const loginParam = options.loginParams[property];
-                if (loginParam) {
-                    redirectURL.query[property] = loginParam;
+            const loginParams = options.loginParams;
+            if (loginParams) {
+                for (const loginParamKey in loginParams) {
+                    if (loginParams.hasOwnProperty(loginParamKey)) {
+                        const loginParamValue = loginParams[loginParamKey];
+                        if (loginParamValue) {
+                            redirectURL.searchParams.append(loginParamValue, loginParamValue);
+                        }
+                    }
                 }
             }
-            this.redirect(url.format(redirectURL));
+            this.redirect(redirectURL.toString());
             return;
         }
         const verified = (err, user, info) => {
@@ -188,7 +195,7 @@ class Strategy extends passport.Strategy {
         };
         if (this.useSaml) {
             const soapEnvelope = `<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/"><SOAP-ENV:Header/><SOAP-ENV:Body><samlp:Request xmlns:samlp="urn:oasis:names:tc:SAML:1.0:protocol" MajorVersion="1" MinorVersion="1" RequestID="${uuid_1.v4()}" IssueInstant="${new Date().toISOString()}"><samlp:AssertionArtifact>${ticket}</samlp:AssertionArtifact></samlp:Request></SOAP-ENV:Body></SOAP-ENV:Envelope>`;
-            this._client.post(this.ssoBase + _validateUri, soapEnvelope, {
+            this._client.post(new url.URL(_validateUri, this.ssoBase).toString(), soapEnvelope, {
                 params: {
                     TARGET: service,
                 },
@@ -205,7 +212,7 @@ class Strategy extends passport.Strategy {
             });
         }
         else {
-            this._client.get(this.ssoBase + _validateUri, {
+            this._client.get(new url.URL(_validateUri, this.ssoBase).toString(), {
                 params: {
                     ticket: ticket,
                     service: service,

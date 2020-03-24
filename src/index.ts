@@ -23,7 +23,7 @@ export interface StrategyOptions {
 }
 
 export interface AuthenticateOptions extends passport.AuthenticateOptions {
-    loginParams?: { [key: string]: string | string[] };
+    loginParams?: { [key: string]: string | undefined };
 }
 
 export interface Profile {
@@ -96,7 +96,6 @@ export class Strategy extends passport.Strategy {
     public validateURL?: string;
     public serviceURL?: string;
     public useSaml: boolean;
-    public parsed: url.UrlObject;
 
     private _client: axios.AxiosInstance;
     private _verify: VerifyCallback;
@@ -107,17 +106,17 @@ export class Strategy extends passport.Strategy {
     constructor(options: StrategyOptions, verify: VerifyCallback) {
         super();
 
+        this.name = 'cas';
         this.version = options.version || "CAS1.0";
         this.ssoBase = options.ssoBaseURL;
         this.serverBaseURL = options.serverBaseURL;
         this.validateURL = options.validateURL;
         this.serviceURL = options.serviceURL;
         this.useSaml = options.useSaml || false;
-        this.parsed = url.parse(this.ssoBase);
-        this._client = axios.default.create(options.agentOptions);
+        new url.URL(this.ssoBase); // validate base URL
 
-        this.name = 'cas';
         this._verify = verify;
+        this._client = axios.default.create(options.agentOptions);
         this._passReqToCallback = options.passReqToCallback || false;
 
         const xmlParseOpts: xml2js.Options = {
@@ -230,13 +229,11 @@ export class Strategy extends passport.Strategy {
         }
     }
 
-    private service(req: express.Request) {
+    private service(req: express.Request): string {
         const serviceURL = this.serviceURL || req.originalUrl;
-        const resolvedURL = url.resolve(this.serverBaseURL, serviceURL);
-        const parsedURL = url.parse(resolvedURL, true);
-        delete parsedURL.query.ticket;
-        delete parsedURL.search;
-        return url.format(parsedURL);
+        const resolvedURL = new url.URL(serviceURL, this.serverBaseURL);
+        resolvedURL.searchParams.delete('ticket');
+        return resolvedURL.toString();
     };
 
     public authenticate(req: express.Request, options?: AuthenticateOptions) {
@@ -248,24 +245,33 @@ export class Strategy extends passport.Strategy {
         if (relayState) {
             // logout locally
             req.logout();
-            return this.redirect(`${this.ssoBase}/logout?_eventId=next&RelayState=${relayState}`);
+            const redirectURL = new url.URL('/logout', this.ssoBase)
+            redirectURL.searchParams.append('_eventId', 'next');
+            redirectURL.searchParams.append('RelayState', relayState);
+            this.redirect(redirectURL.toString());
+            return;
         }
 
         const service = this.service(req);
 
         const ticket = req.query.ticket;
         if (!ticket) {
-            const redirectURL = url.parse(`${this.ssoBase}/login`, true);
+            const redirectURL = new url.URL(this.ssoBase, '/login');
 
-            redirectURL.query.service = service;
+            redirectURL.searchParams.append('service', service);
             // copy loginParams in login query
-            for (const property in options.loginParams ) {
-                const loginParam = options.loginParams[property];
-                if (loginParam) {
-                    redirectURL.query[property] = loginParam;
+            const loginParams = options.loginParams;
+            if (loginParams) {
+                for (const loginParamKey in loginParams ) {
+                    if (loginParams.hasOwnProperty(loginParamKey)) {
+                        const loginParamValue = loginParams[loginParamKey];
+                        if (loginParamValue) {
+                            redirectURL.searchParams.append(loginParamValue, loginParamValue);
+                        }
+                    }
                 }
             }
-            this.redirect(url.format(redirectURL));
+            this.redirect(redirectURL.toString());
             return;
         }
 
@@ -288,7 +294,7 @@ export class Strategy extends passport.Strategy {
         if (this.useSaml) {
             const soapEnvelope = `<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/"><SOAP-ENV:Header/><SOAP-ENV:Body><samlp:Request xmlns:samlp="urn:oasis:names:tc:SAML:1.0:protocol" MajorVersion="1" MinorVersion="1" RequestID="${uuidv4()}" IssueInstant="${new Date().toISOString()}"><samlp:AssertionArtifact>${ticket}</samlp:AssertionArtifact></samlp:Request></SOAP-ENV:Body></SOAP-ENV:Envelope>`;
 
-            this._client.post<string>(this.ssoBase + _validateUri, soapEnvelope, {
+            this._client.post<string>(new url.URL(_validateUri, this.ssoBase).toString(), soapEnvelope, {
                 params: {
                     TARGET: service,
                 },
@@ -304,7 +310,7 @@ export class Strategy extends passport.Strategy {
                 return;
             });
         } else {
-            this._client.get<string>(this.ssoBase + _validateUri, {
+            this._client.get<string>(new url.URL(_validateUri, this.ssoBase).toString(), {
                 params: {
                     ticket: ticket,
                     service: service,
