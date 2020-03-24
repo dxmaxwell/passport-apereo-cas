@@ -125,7 +125,7 @@ export class Strategy extends passport.Strategy {
         this._verify = verify;
         this._passReqToCallback = options.passReqToCallback || false;
 
-        var xmlParseOpts: xml2js.Options = {
+        const xmlParseOpts: xml2js.Options = {
             'trim': true,
             'normalize': true,
             'explicitArray': false,
@@ -135,25 +135,26 @@ export class Strategy extends passport.Strategy {
             ]
         };
 
-        var self = this;
         switch (this.version) {
             case "CAS1.0":
                 this._validateUri = "/validate";
                 this._validate = (req, body, verified) => {
-                    var lines = body.split('\n');
+                    const lines = body.split('\n');
                     if (lines.length >= 1) {
                         if (lines[0] === 'no') {
-                            return verified(new Error('Authentication failed'));
+                            verified(new Error('Authentication failed'));
+                            return;
                         } else if (lines[0] === 'yes' && lines.length >= 2) {
-                            if (self._passReqToCallback) {
-                                self._verify(req, lines[1], verified);
+                            if (this._passReqToCallback) {
+                                this._verify(req, lines[1], verified);
                             } else {
-                                self._verify(lines[1], verified);
+                                this._verify(lines[1], verified);
                             }
                             return;
                         }
                     }
-                    return verified(new Error('The response from the server was bad'));
+                    verified(new Error('The response from the server was bad'));
+                    return
                 };
                 break;
             case "CAS2.0":
@@ -166,29 +167,31 @@ export class Strategy extends passport.Strategy {
                                 return verified(new Error('The response from the server was bad'));
                             }
                             try {
-                                var response = result.envelope.body.response;
-                                var success = response.status.statuscode['$'].Value.match(/Success$/);
+                                const response = result.envelope.body.response;
+                                const success = response.status.statuscode['$'].Value.match(/Success$/);
                                 if (success) {
-                                    var attributes: { [key: string]: object } = {};
+                                    const attributes: { [key: string]: object } = {};
                                     if (Array.isArray(response.assertion.attributestatement.attribute)) {
                                         for (const attribute of response.assertion.attributestatement.attribute) {
                                             attributes[attribute['$'].AttributeName.toLowerCase()] = attribute.attributevalue;
                                         };
                                     }
-                                    var profile = {
+                                    const profile = {
                                         'user': response.assertion.authenticationstatement.subject.nameidentifier,
                                         'attributes': attributes
                                     };
-                                    if (self._passReqToCallback) {
-                                        self._verify(req, profile, verified);
+                                    if (this._passReqToCallback) {
+                                        this._verify(req, profile, verified);
                                     } else {
-                                        self._verify(profile, verified);
+                                        this._verify(profile, verified);
                                     }
                                     return;
                                 }
-                                return verified(new Error('Authentication failed'));
+                                verified(new Error('Authentication failed'));
+                                return;
                             } catch (e) {
-                                return verified(new Error('Authentication failed'));
+                                verified(new Error('Authentication failed'));
+                                return;
                             }
                         });
                     };
@@ -207,19 +210,21 @@ export class Strategy extends passport.Strategy {
                                 if (result.serviceresponse.authenticationfailure) {
                                     return verified(new Error('Authentication failed ' + result.serviceresponse.authenticationfailure.$.code));
                                 }
-                                var success = result.serviceresponse.authenticationsuccess;
+                                const success = result.serviceresponse.authenticationsuccess;
                                 if (success) {
-                                    if (self._passReqToCallback) {
-                                        self._verify(req, success, verified);
+                                    if (this._passReqToCallback) {
+                                        this._verify(req, success, verified);
                                     } else {
-                                        self._verify(success, verified);
+                                        this._verify(success, verified);
                                     }
                                     return;
                                 }
-                                return verified(new Error('Authentication failed'));
+                                verified(new Error('Authentication failed'));
+                                return;
 
                             } catch (e) {
-                                return verified(new Error('Authentication failed'));
+                                verified(new Error('Authentication failed'));
+                                return;
                             }
                         });
                     };
@@ -231,9 +236,9 @@ export class Strategy extends passport.Strategy {
     }
 
     private service(req: express.Request) {
-        var serviceURL = this.serviceURL || req.originalUrl;
-        var resolvedURL = url.resolve(this.serverBaseURL, serviceURL);
-        var parsedURL = url.parse(resolvedURL, true);
+        const serviceURL = this.serviceURL || req.originalUrl;
+        const resolvedURL = url.resolve(this.serverBaseURL, serviceURL);
+        const parsedURL = url.parse(resolvedURL, true);
         delete parsedURL.query.ticket;
         delete parsedURL.search;
         return url.format(parsedURL);
@@ -244,59 +249,60 @@ export class Strategy extends passport.Strategy {
 
         // CAS Logout flow as described in
         // https://wiki.jasig.org/display/CAS/Proposal%3A+Front-Channel+Single+Sign-Out var relayState = req.query.RelayState;
-        var relayState = req.query.RelayState;
+        const relayState = req.query.RelayState;
         if (relayState) {
             // logout locally
             req.logout();
-            return this.redirect(this.ssoBase + '/logout?_eventId=next&RelayState=' +
-                relayState);
+            return this.redirect(`${this.ssoBase}/logout?_eventId=next&RelayState=${relayState}`);
         }
 
-        var service = this.service(req);
+        const service = this.service(req);
 
-        var ticket = req.query.ticket;
+        const ticket = req.query.ticket;
         if (!ticket) {
-            var redirectURL = url.parse(this.ssoBase + '/login', true);
+            const redirectURL = url.parse(`${this.ssoBase}/login`, true);
 
             redirectURL.query.service = service;
             // copy loginParams in login query
-            for (var property in options.loginParams ) {
-                var loginParam = options.loginParams[property];
+            for (const property in options.loginParams ) {
+                const loginParam = options.loginParams[property];
                 if (loginParam) {
                     redirectURL.query[property] = loginParam;
                 }
             }
-            return this.redirect(url.format(redirectURL));
+            this.redirect(url.format(redirectURL));
+            return;
         }
 
-        var self = this;
-        var verified = (err: any, user?: object, info?: object) => {
+        const verified = (err: any, user?: object, info?: object) => {
             if (err) {
-                return self.error(err);
+                return this.error(err);
             }
             if (!user) {
-                return self.fail(String(info));
+                return this.fail(String(info));
             }
-            self.success(user, info);
+            this.success(user, info);
         };
-        var _validateUri = this.validateURL || this._validateUri;
+        const _validateUri = this.validateURL || this._validateUri;
 
-        var _handleResponse = (response: http.IncomingMessage) => {
+        const _handleResponse = (response: http.IncomingMessage) => {
             response.setEncoding('utf8');
-            var body = '';
+            let body = '';
             response.on('data', (chunk) => {
-                return body += chunk;
+                body += chunk;
+                return;
             });
             return response.on('end', () => {
-                return self._validate(req, body, verified);
+                this._validate(req, body, verified);
+                return;
             });
         };
 
         if (this.useSaml) {
-            var requestId = uuidv4();
-            var issueInstant = new Date().toISOString();
-            var soapEnvelope = util.format('<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/"><SOAP-ENV:Header/><SOAP-ENV:Body><samlp:Request xmlns:samlp="urn:oasis:names:tc:SAML:1.0:protocol" MajorVersion="1" MinorVersion="1" RequestID="%s" IssueInstant="%s"><samlp:AssertionArtifact>%s</samlp:AssertionArtifact></samlp:Request></SOAP-ENV:Body></SOAP-ENV:Envelope>', requestId, issueInstant, ticket);
-            var request = this.client.request({
+            const requestId = uuidv4();
+            const issueInstant = new Date().toISOString();
+            const soapEnvelope = util.format('<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/"><SOAP-ENV:Header/><SOAP-ENV:Body><samlp:Request xmlns:samlp="urn:oasis:names:tc:SAML:1.0:protocol" MajorVersion="1" MinorVersion="1" RequestID="%s" IssueInstant="%s"><samlp:AssertionArtifact>%s</samlp:AssertionArtifact></samlp:Request></SOAP-ENV:Body></SOAP-ENV:Envelope>', requestId, issueInstant, ticket);
+            const request = this.client.request({
                 host: this.parsed.hostname,
                 port: this.parsed.port,
                 method: 'POST',
@@ -309,12 +315,13 @@ export class Strategy extends passport.Strategy {
             }, _handleResponse);
 
             request.on('error', (e: any) => {
-                return self.fail(String(e));
+                this.fail(String(e));
+                return;
             });
             request.write(soapEnvelope);
             request.end();
         } else {
-            var get = this.client.get({
+            const get = this.client.get({
                 host: this.parsed.hostname,
                 port: this.parsed.port,
                 path: url.format({
@@ -327,7 +334,8 @@ export class Strategy extends passport.Strategy {
             }, _handleResponse);
 
             get.on('error', (e: any) => {
-                return self.fail(String(e));
+                this.fail(String(e));
+                return;
             });
         }
     };
