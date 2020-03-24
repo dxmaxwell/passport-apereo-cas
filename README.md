@@ -17,8 +17,8 @@ and adding support for HTTP proxy configuration via http_proxy environment varia
 #### Configure Strategy
 
     passport.use(new (require('passport-apereo-cas').Strategy)({
-      ssoBaseURL: 'http://www.example.com/',
-      serverBaseURL: 'http://localhost:3000'
+      casBaseURL: 'http://www.example.com/',
+      serviceBaseURL: 'http://localhost:3000'
     }, function(login, done) {
       User.findOne({login: login}, function (err, user) {
         if (err) {
@@ -86,8 +86,8 @@ Here is how you can use them:
 
     passport.use(new (require('passport-cas').Strategy)({
       version: 'CAS3.0',
-      ssoBaseURL: 'http://www.example.com/',
-      serverBaseURL: 'http://localhost:3000'
+      casBaseURL: 'http://www.example.com/',
+      serviceBaseURL: 'http://localhost:3000'
     }, function(profile, done) {
       var login = profile.user;
 
@@ -108,8 +108,8 @@ CAS 2.0 will work with the CAS 3.0 configuration, but you need to set the valida
 
     passport.use(new (require('passport-cas').Strategy)({
       version: 'CAS3.0',
-      ssoBaseURL: 'http://www.example.com/',
-      serverBaseURL: 'http://localhost:3000/cas',
+      casBaseURL: 'http://www.example.com/',
+      serviceBaseURL: 'http://localhost:3000/cas',
       validateURL: '/serviceValidate'
     }, function(profile, done) {
       var login = profile.user;
