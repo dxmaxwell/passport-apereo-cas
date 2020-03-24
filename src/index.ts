@@ -107,7 +107,7 @@ export class Strategy extends passport.Strategy {
         super();
 
         this.name = 'cas';
-        this.version = options.version || "CAS1.0";
+        this.version = options.version || 'CAS1.0';
         this.ssoBase = options.ssoBaseURL;
         this.serverBaseURL = options.serverBaseURL;
         this.validateURL = options.validateURL;
@@ -130,8 +130,8 @@ export class Strategy extends passport.Strategy {
         };
 
         switch (this.version) {
-            case "CAS1.0":
-                this._validateUri = "/validate";
+            case 'CAS1.0':
+                this._validateUri = '/validate';
                 this._validate = (req, body, verified) => {
                     const lines = body.split('\n');
                     if (lines.length >= 1) {
@@ -151,10 +151,10 @@ export class Strategy extends passport.Strategy {
                     return
                 };
                 break;
-            case "CAS2.0":
-            case "CAS3.0":
+            case 'CAS2.0':
+            case 'CAS3.0':
                 if (this.useSaml) {
-                    this._validateUri = "/samlValidate";
+                    this._validateUri = '/samlValidate';
                     this._validate = (req, body, verified) => {
                         xml2js.parseString(body, xmlParseOpts, (err, result: SAMLValidateResult) => {
                             if (err) {
@@ -193,7 +193,7 @@ export class Strategy extends passport.Strategy {
                     if (this.version === 'CAS2.0') {
                         this._validateUri = '/serviceValidate';
                     } else {
-                        this._validateUri = "/p3/serviceValidate";
+                        this._validateUri = '/p3/serviceValidate';
                     }
                     this._validate = (req, body, verified) => {
                         xml2js.parseString(body, xmlParseOpts, (err, result: CASValidateResult) => {
