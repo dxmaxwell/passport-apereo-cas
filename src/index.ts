@@ -11,14 +11,14 @@ import * as xml2js from 'xml2js';
 
 export type VersionOptions = 'CAS1.0' | 'CAS2.0' | 'CAS3.0';
 
-export interface StrategyOptions {
+export interface StrategyOptions<REQ extends boolean = boolean> {
     version?: VersionOptions;
     casBaseURL: string;
     serviceBaseURL: string;
     serviceURL?: string;
     validateURL?: string;
     useSaml?: boolean;
-    passReqToCallback?: boolean;
+    passReqToCallback?: REQ;
     agentOptions?: any;
 }
 
@@ -33,10 +33,8 @@ export interface Profile {
 
 export type DoneCallback = (err: any, user?: any, info?: any) => void;
 
-export interface VerifyCallback {
-    (profile: string | Profile, done: DoneCallback): void;
-    (req: express.Request, profile: string | Profile, done: DoneCallback): void;
-}
+export type VerifyCallback = (profile: string | Profile, done: DoneCallback) => void;
+export type VerifyCallbackWithRequest =  (req: express.Request, profile: string | Profile, done: DoneCallback) => void;
 
 // See specification: https://apereo.github.io/cas/6.1.x/protocol/CAS-Protocol-Specification.html#42-samlvalidate-cas-30
 interface SAMLValidateResult {
@@ -98,12 +96,14 @@ export class Strategy extends passport.Strategy {
     public useSaml: boolean;
 
     private _client: axios.AxiosInstance;
-    private _verify: VerifyCallback;
+    private _verify: VerifyCallback | VerifyCallbackWithRequest;
     private _validate: (req: express.Request, body: string, verified: DoneCallback) => void;
     private _validateUri: string;
     private _passReqToCallback: boolean;
 
-    constructor(options: StrategyOptions, verify: VerifyCallback) {
+    constructor(options: StrategyOptions<false>, verify: VerifyCallback);
+    constructor(options: StrategyOptions<true>, verify: VerifyCallbackWithRequest);
+    constructor(options: StrategyOptions, verify: VerifyCallback | VerifyCallbackWithRequest) {
         super();
 
         this.name = 'cas';
@@ -139,9 +139,9 @@ export class Strategy extends passport.Strategy {
                             return;
                         } else if (lines[0] === 'yes' && lines.length >= 2) {
                             if (this._passReqToCallback) {
-                                this._verify(req, lines[1], verified);
+                                (this._verify as VerifyCallbackWithRequest)(req, lines[1], verified);
                             } else {
-                                this._verify(lines[1], verified);
+                                (this._verify as VerifyCallback)(lines[1], verified);
                             }
                             return;
                         }
@@ -174,9 +174,9 @@ export class Strategy extends passport.Strategy {
                                         'attributes': attributes
                                     };
                                     if (this._passReqToCallback) {
-                                        this._verify(req, profile, verified);
+                                        (this._verify as VerifyCallbackWithRequest)(req, profile, verified);
                                     } else {
-                                        this._verify(profile, verified);
+                                        (this._verify as VerifyCallback)(profile, verified);
                                     }
                                     return;
                                 }
@@ -206,9 +206,9 @@ export class Strategy extends passport.Strategy {
                                 const success = result.serviceresponse.authenticationsuccess;
                                 if (success) {
                                     if (this._passReqToCallback) {
-                                        this._verify(req, success, verified);
+                                        (this._verify as VerifyCallbackWithRequest)(req, success, verified);
                                     } else {
-                                        this._verify(success, verified);
+                                        (this._verify as VerifyCallback)(success, verified);
                                     }
                                     return;
                                 }
