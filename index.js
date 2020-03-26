@@ -32,7 +32,7 @@ class Strategy extends passport.Strategy {
         };
         switch (this.version) {
             case 'CAS1.0':
-                this._validateUri = '/validate';
+                this._validateUri = './validate';
                 this._validate = (req, body, verified) => {
                     const lines = body.split('\n');
                     if (lines.length >= 1) {
@@ -57,7 +57,7 @@ class Strategy extends passport.Strategy {
             case 'CAS2.0':
             case 'CAS3.0':
                 if (this.useSaml) {
-                    this._validateUri = '/samlValidate';
+                    this._validateUri = './samlValidate';
                     this._validate = (req, body, verified) => {
                         xml2js.parseString(body, xmlParseOpts, (err, result) => {
                             if (err) {
@@ -98,10 +98,10 @@ class Strategy extends passport.Strategy {
                 }
                 else {
                     if (this.version === 'CAS2.0') {
-                        this._validateUri = '/serviceValidate';
+                        this._validateUri = './serviceValidate';
                     }
                     else {
-                        this._validateUri = '/p3/serviceValidate';
+                        this._validateUri = './p3/serviceValidate';
                     }
                     this._validate = (req, body, verified) => {
                         xml2js.parseString(body, xmlParseOpts, (err, result) => {
@@ -152,7 +152,7 @@ class Strategy extends passport.Strategy {
         if (relayState) {
             // logout locally
             req.logout();
-            const redirectURL = new url.URL('/logout', this.casBaseURL);
+            const redirectURL = new url.URL('./logout', this.casBaseURL);
             redirectURL.searchParams.append('_eventId', 'next');
             redirectURL.searchParams.append('RelayState', relayState);
             this.redirect(redirectURL.toString());
@@ -161,7 +161,7 @@ class Strategy extends passport.Strategy {
         const service = this.service(req);
         const ticket = req.query.ticket;
         if (!ticket) {
-            const redirectURL = new url.URL('/login', this.casBaseURL);
+            const redirectURL = new url.URL('./login', this.casBaseURL);
             redirectURL.searchParams.append('service', service);
             // copy loginParams in login query
             const loginParams = options.loginParams;
