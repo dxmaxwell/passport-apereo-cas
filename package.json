@@ -8,14 +8,14 @@
   },
   "repository": {
     "type": "git",
-    "url": "git@github.com:jcu-eresearch/passport-cas.git"
+    "url": "git@github.com:dylan171/passport-apereo-cas.git"
   },
   "keywords": [
     "passport",
     "auth",
     "cas"
   ],
-  "author": "JCU eResearch Centre",
+  "author": "dylan171",
   "license": "MIT",
   "bugs": {
     "url": "https://github.com/dylan171/passport-apereo-cas/issues"
