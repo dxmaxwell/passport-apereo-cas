@@ -151,22 +151,22 @@ export class Strategy extends passport.Strategy {
     };
 
     private async validateSAML(req: express.Request, result: SAMLValidateResult): Promise<ValidateProfileInfo> {
-                                const response = result.envelope.body.response;
-                                const success = response.status.statuscode['$'].Value.match(/Success$/);
-                                if (!success) {
-                                    return { profile: false, info: 'Authentication failed' };
-                                }
-                                    const attributes: { [key: string]: object } = {};
-                                    if (Array.isArray(response.assertion.attributestatement.attribute)) {
-                                        for (const attribute of response.assertion.attributestatement.attribute) {
-                                            attributes[attribute['$'].AttributeName.toLowerCase()] = attribute.attributevalue;
-                                        };
-                                    }
-                                    const profile = {
-                                        'user': response.assertion.authenticationstatement.subject.nameidentifier,
-                                        'attributes': attributes
-                                    };
-                                return { profile };
+        const response = result.envelope.body.response;
+        const success = response.status.statuscode['$'].Value.match(/Success$/);
+        if (!success) {
+            return { profile: false, info: 'Authentication failed' };
+        }
+        const attributes: { [key: string]: object } = {};
+        if (Array.isArray(response.assertion.attributestatement.attribute)) {
+            for (const attribute of response.assertion.attributestatement.attribute) {
+                attributes[attribute['$'].AttributeName.toLowerCase()] = attribute.attributevalue;
+            };
+        }
+        const profile = {
+            'user': response.assertion.authenticationstatement.subject.nameidentifier,
+            'attributes': attributes
+        };
+        return { profile };
     }
  
     private async validateCAS23(req: express.Request, result: CASValidateResult): Promise<ValidateProfileInfo> {
@@ -190,111 +190,62 @@ export class Strategy extends passport.Strategy {
     };
 
     public authenticate(req: express.Request, options?: AuthenticateOptions) {
-    Promise.resolve().then(async (): Promise<void> => {
-        options = options || {};
+        Promise.resolve().then(async (): Promise<void> => {
+            options = options || {};
 
-        // CAS Logout flow as described in
-        // https://wiki.jasig.org/display/CAS/Proposal%3A+Front-Channel+Single+Sign-Out var relayState = req.query.RelayState;
-        const relayState = req.query.RelayState;
-        if (typeof relayState === 'string' && relayState) {
-            // logout locally
-            req.logout();
-            const redirectURL = new url.URL('./logout', this.casBaseURL)
-            redirectURL.searchParams.append('_eventId', 'next');
-            redirectURL.searchParams.append('RelayState', relayState);
-            this.redirect(redirectURL.toString());
-            return;
-        }
+            // CAS Logout flow as described in
+            // https://wiki.jasig.org/display/CAS/Proposal%3A+Front-Channel+Single+Sign-Out var relayState = req.query.RelayState;
+            const relayState = req.query.RelayState;
+            if (typeof relayState === 'string' && relayState) {
+                // logout locally
+                req.logout();
+                const redirectURL = new url.URL('./logout', this.casBaseURL)
+                redirectURL.searchParams.append('_eventId', 'next');
+                redirectURL.searchParams.append('RelayState', relayState);
+                this.redirect(redirectURL.toString());
+                return;
+            }
 
-        const service = this.service(req);
+            const service = this.service(req);
 
-        const ticket = req.query.ticket;
-        if (!ticket) {
-            const redirectURL = new url.URL('./login', this.casBaseURL);
+            const ticket = req.query.ticket;
+            if (!ticket) {
+                const redirectURL = new url.URL('./login', this.casBaseURL);
 
-            redirectURL.searchParams.append('service', service);
-            // copy loginParams in login query
-            const loginParams = options.loginParams;
-            if (loginParams) {
-                for (const loginParamKey in loginParams ) {
-                    if (loginParams.hasOwnProperty(loginParamKey)) {
-                        const loginParamValue = loginParams[loginParamKey];
-                        if (loginParamValue) {
-                            redirectURL.searchParams.append(loginParamValue, loginParamValue);
+                redirectURL.searchParams.append('service', service);
+                // copy loginParams in login query
+                const loginParams = options.loginParams;
+                if (loginParams) {
+                    for (const loginParamKey in loginParams ) {
+                        if (loginParams.hasOwnProperty(loginParamKey)) {
+                            const loginParamValue = loginParams[loginParamKey];
+                            if (loginParamValue) {
+                                redirectURL.searchParams.append(loginParamValue, loginParamValue);
+                            }
                         }
                     }
                 }
-            }
-            this.redirect(redirectURL.toString());
-            return;
-        }
-
-        let profileInfo: ValidateProfileInfo;
-        if (this.useSaml) {
-            const soapEnvelope = `<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/"><SOAP-ENV:Header/><SOAP-ENV:Body><samlp:Request xmlns:samlp="urn:oasis:names:tc:SAML:1.0:protocol" MajorVersion="1" MinorVersion="1" RequestID="${uuidv4()}" IssueInstant="${new Date().toISOString()}"><samlp:AssertionArtifact>${ticket}</samlp:AssertionArtifact></samlp:Request></SOAP-ENV:Body></SOAP-ENV:Envelope>`;
-            const validateURL = new url.URL(this.validateURL || './samlValidate', this.casBaseURL).toString();
-            try {
-            const response = await this._client.post<string>(validateURL, soapEnvelope, {
-                params: {
-                    TARGET: service,
-                },
-                headers: {
-                    'Content-Type': 'application/xml',
-                    'Accept': 'application/xml',
-                    'Accept-Charset': 'utf-8',
-                },
-                responseType: 'text',
-            });
-            const result: SAMLValidateResult = await xml2js.parseStringPromise(response.data, {
-                'trim': true,
-                'normalize': true,
-                'explicitArray': false,
-                'tagNameProcessors': [
-                    xml2js.processors.normalize,
-                    xml2js.processors.stripPrefix
-                ]
-            });
-            profileInfo = await this.validateSAML(req, result);
-            } catch (err: unknown) {
-                this.fail(String(err), 500);
+                this.redirect(redirectURL.toString());
                 return;
             }
-        } else {
-            let validateURL: string;
-            switch (this.version) {
-            default:
-            case 'CAS1.0':
-                validateURL = new url.URL(this.validateURL || './validate', this.casBaseURL).toString();
-                break;
-            case 'CAS2.0':
-                validateURL = new url.URL(this.validateURL || './serviceValidate', this.casBaseURL).toString();
-                break;
-            case 'CAS3.0':
-                validateURL = new url.URL(this.validateURL || './p3/serviceValidate', this.casBaseURL).toString();
-                break;
-            }
-            try {
-            const response = await this._client.get<string>(validateURL, {
-                params: {
-                    ticket: ticket,
-                    service: service,
-                },
-                headers: {
-                    'Accept': 'application/xml',
-                    'Accept-Charset': 'utf-8',
-                },
-                responseType: 'text',
-            });
-            switch (this.version) {
-                default:
-                case 'CAS1.0': {
-                    const result = response.data.split('\n').map((s) => s.trim());
-                    profileInfo = await this.validateCAS1(req, result);
-                    break;
-                }
-                case 'CAS2.0':
-                case 'CAS3.0': {
-                    const result: CASValidateResult = await xml2js.parseStringPromise(response.data, {
+
+            let profileInfo: ValidateProfileInfo;
+            if (this.useSaml) {
+                const soapEnvelope = `<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/"><SOAP-ENV:Header/><SOAP-ENV:Body><samlp:Request xmlns:samlp="urn:oasis:names:tc:SAML:1.0:protocol" MajorVersion="1" MinorVersion="1" RequestID="${uuidv4()}" IssueInstant="${new Date().toISOString()}"><samlp:AssertionArtifact>${ticket}</samlp:AssertionArtifact></samlp:Request></SOAP-ENV:Body></SOAP-ENV:Envelope>`;
+                const validateURL = new url.URL(this.validateURL || './samlValidate', this.casBaseURL).toString();
+                try {
+                    const response = await this._client.post<string>(validateURL, soapEnvelope, {
+                        params: {
+                            TARGET: service,
+                        },
+                        headers: {
+                            'Content-Type': 'application/xml',
+                            'Accept': 'application/xml',
+                            'Accept-Charset': 'utf-8',
+                        },
+                        responseType: 'text',
+                    });
+                    const result: SAMLValidateResult = await xml2js.parseStringPromise(response.data, {
                         'trim': true,
                         'normalize': true,
                         'explicitArray': false,
@@ -303,48 +254,97 @@ export class Strategy extends passport.Strategy {
                             xml2js.processors.stripPrefix
                         ]
                     });
-                    profileInfo = await this.validateCAS23(req, result);
+                    profileInfo = await this.validateSAML(req, result);
+                } catch (err: unknown) {
+                    this.fail(String(err), 500);
+                    return;
+                }
+            } else {
+                let validateURL: string;
+                switch (this.version) {
+                default:
+                case 'CAS1.0':
+                    validateURL = new url.URL(this.validateURL || './validate', this.casBaseURL).toString();
+                    break;
+                case 'CAS2.0':
+                    validateURL = new url.URL(this.validateURL || './serviceValidate', this.casBaseURL).toString();
+                    break;
+                case 'CAS3.0':
+                    validateURL = new url.URL(this.validateURL || './p3/serviceValidate', this.casBaseURL).toString();
                     break;
                 }
+                try {
+                    const response = await this._client.get<string>(validateURL, {
+                        params: {
+                            ticket: ticket,
+                            service: service,
+                        },
+                        headers: {
+                            'Accept': 'application/xml',
+                            'Accept-Charset': 'utf-8',
+                        },
+                        responseType: 'text',
+                    });
+                    switch (this.version) {
+                        default:
+                        case 'CAS1.0': {
+                            const result = response.data.split('\n').map((s) => s.trim());
+                            profileInfo = await this.validateCAS1(req, result);
+                            break;
+                        }
+                        case 'CAS2.0':
+                        case 'CAS3.0': {
+                            const result: CASValidateResult = await xml2js.parseStringPromise(response.data, {
+                                'trim': true,
+                                'normalize': true,
+                                'explicitArray': false,
+                                'tagNameProcessors': [
+                                    xml2js.processors.normalize,
+                                    xml2js.processors.stripPrefix
+                                ]
+                            });
+                            profileInfo = await this.validateCAS23(req, result);
+                            break;
+                        }
+                    }
+                } catch (err: unknown) {
+                    this.fail(String(err), 500);
+                    return;
+                }
             }
-            } catch (err: unknown) {
-                this.fail(String(err), 500);
+
+            if (profileInfo.profile === false) {
+                this.fail(profileInfo.info);
                 return;
             }
-        }
 
-        if (profileInfo.profile === false) {
-            this.fail(profileInfo.info);
-            return;
-        }
+            let userInfo: VerifyUserInfo;
+            try {
+                userInfo = await this.verify(req, profileInfo.profile);
+            } catch (err: unknown) {
+                this.error(err);
+                return;
+            }
 
-        let userInfo: VerifyUserInfo;
-        try {
-            userInfo = await this.verify(req, profileInfo.profile);
-        } catch (err: unknown) {
+            // Support `info` of type string, even though it is
+            // not supported by the passport type definitions.
+            // Recommend use of an object like `{ message: 'Failed' }`
+            if (!userInfo.user) {
+                const info = userInfo.info;
+                if (typeof info === 'string') {
+                    this.fail(info);
+                } else if (!info || !info.message) {
+                    this.fail();
+                } else {
+                    this.fail(info.message);
+                }
+                return;
+            }
+            this.success(userInfo.user, userInfo.info as (object | undefined));
+        })
+        .catch((err: any) => {
             this.error(err);
             return;
-        }
-
-        // Support `info` of type string, even though it is
-        // not supported by the passport type definitions.
-        // Recommend use of an object like `{ message: 'Failed' }`
-        if (!userInfo.user) {
-            const info = userInfo.info;
-            if (typeof info === 'string') {
-                this.fail(info);
-            } else if (!info || !info.message) {
-                this.fail();
-            } else {
-                this.fail(info.message);
-            }
-            return;
-        }
-        this.success(userInfo.user, userInfo.info as (object | undefined));
-    })
-    .catch((err: any) => {
-        this.error(err);
-        return;
-    });
+        });
     };
 }
