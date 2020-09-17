@@ -54,10 +54,10 @@ class Strategy extends passport.Strategy {
     }
     validateCAS1(req, result) {
         return __awaiter(this, void 0, void 0, function* () {
-            if (result.length < 2 || result[0] !== 'yes' || result[1].trim() === '') {
+            if (result.length < 2 || result[0] !== 'yes' || result[1] === '') {
                 return { profile: false, info: 'Authentication failed' };
             }
-            return { profile: result[1].trim() };
+            return { profile: result[1] };
         });
     }
     ;
@@ -138,24 +138,12 @@ class Strategy extends passport.Strategy {
                 this.redirect(redirectURL.toString());
                 return;
             }
-            const xmlParseOpts = {
-                'trim': true,
-                'normalize': true,
-                'explicitArray': false,
-                'tagNameProcessors': [
-                    xml2js.processors.normalize,
-                    xml2js.processors.stripPrefix
-                ]
-            };
-            let _validateUri = this.validateURL;
             let profileInfo;
             if (this.useSaml) {
                 const soapEnvelope = `<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/"><SOAP-ENV:Header/><SOAP-ENV:Body><samlp:Request xmlns:samlp="urn:oasis:names:tc:SAML:1.0:protocol" MajorVersion="1" MinorVersion="1" RequestID="${uuid_1.v4()}" IssueInstant="${new Date().toISOString()}"><samlp:AssertionArtifact>${ticket}</samlp:AssertionArtifact></samlp:Request></SOAP-ENV:Body></SOAP-ENV:Envelope>`;
-                if (!_validateUri) {
-                    _validateUri = './samlValidate';
-                }
+                const validateURL = new url.URL(this.validateURL || './samlValidate', this.casBaseURL).toString();
                 try {
-                    const response = yield this._client.post(new url.URL(_validateUri, this.casBaseURL).toString(), soapEnvelope, {
+                    const response = yield this._client.post(validateURL, soapEnvelope, {
                         params: {
                             TARGET: service,
                         },
@@ -166,7 +154,15 @@ class Strategy extends passport.Strategy {
                         },
                         responseType: 'text',
                     });
-                    const result = yield xml2js.parseStringPromise(response.data, xmlParseOpts);
+                    const result = yield xml2js.parseStringPromise(response.data, {
+                        'trim': true,
+                        'normalize': true,
+                        'explicitArray': false,
+                        'tagNameProcessors': [
+                            xml2js.processors.normalize,
+                            xml2js.processors.stripPrefix
+                        ]
+                    });
                     profileInfo = yield this.validateSAML(req, result);
                 }
                 catch (err) {
@@ -175,22 +171,21 @@ class Strategy extends passport.Strategy {
                 }
             }
             else {
-                if (!_validateUri) {
-                    switch (this.version) {
-                        default:
-                        case 'CAS1.0':
-                            _validateUri = './validate';
-                            break;
-                        case 'CAS2.0':
-                            _validateUri = './serviceValidate';
-                            break;
-                        case 'CAS3.0':
-                            _validateUri = './p3/serviceValidate';
-                            break;
-                    }
+                let validateURL;
+                switch (this.version) {
+                    default:
+                    case 'CAS1.0':
+                        validateURL = new url.URL(this.validateURL || './validate', this.casBaseURL).toString();
+                        break;
+                    case 'CAS2.0':
+                        validateURL = new url.URL(this.validateURL || './serviceValidate', this.casBaseURL).toString();
+                        break;
+                    case 'CAS3.0':
+                        validateURL = new url.URL(this.validateURL || './p3/serviceValidate', this.casBaseURL).toString();
+                        break;
                 }
                 try {
-                    const response = yield this._client.get(new url.URL(_validateUri, this.casBaseURL).toString(), {
+                    const response = yield this._client.get(validateURL, {
                         params: {
                             ticket: ticket,
                             service: service,
@@ -204,13 +199,21 @@ class Strategy extends passport.Strategy {
                     switch (this.version) {
                         default:
                         case 'CAS1.0': {
-                            const result = response.data.split('\n');
+                            const result = response.data.split('\n').map((s) => s.trim());
                             profileInfo = yield this.validateCAS1(req, result);
                             break;
                         }
                         case 'CAS2.0':
                         case 'CAS3.0': {
-                            const result = yield xml2js.parseStringPromise(response.data, xmlParseOpts);
+                            const result = yield xml2js.parseStringPromise(response.data, {
+                                'trim': true,
+                                'normalize': true,
+                                'explicitArray': false,
+                                'tagNameProcessors': [
+                                    xml2js.processors.normalize,
+                                    xml2js.processors.stripPrefix
+                                ]
+                            });
                             profileInfo = yield this.validateCAS23(req, result);
                             break;
                         }
