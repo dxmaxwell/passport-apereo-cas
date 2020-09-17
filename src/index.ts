@@ -33,13 +33,13 @@ export interface Profile {
 
 type ValidateProfileInfo = { profile: false | string | Profile, info?: string };
 
-type DoneUser = object | false;
-type DoneInfo = { message?: string } | string;
-export type DoneUserInfo = { user: DoneUser; info?: DoneInfo };
-export type DoneCallback = (err: any, user?: DoneUser, info?: DoneInfo) => void;
+type VerifyUser = object | false;
+type VerifyInfo = { message?: string } | string;
+export type VerifyUserInfo = { user: VerifyUser; info?: VerifyInfo };
+export type VerifyCallback = (err: any, user?: VerifyUser, info?: VerifyInfo) => void;
 
-export type VerifyCallback = (profile: string | Profile, done: DoneCallback) => void;
-export type VerifyCallbackWithRequest =  (req: express.Request, profile: string | Profile, done: DoneCallback) => void;
+export type VerifyFunction = (profile: string | Profile, done: VerifyCallback) => void;
+export type VerifyFunctionWithRequest =  (req: express.Request, profile: string | Profile, done: VerifyCallback) => void;
 
 // See specification: https://apereo.github.io/cas/6.1.x/protocol/CAS-Protocol-Specification.html#42-samlvalidate-cas-30
 interface SAMLValidateResult {
@@ -101,12 +101,12 @@ export class Strategy extends passport.Strategy {
     public useSaml: boolean;
 
     private _client: axios.AxiosInstance;
-    private _verify: VerifyCallback | VerifyCallbackWithRequest;
+    private _verify: VerifyFunction | VerifyFunctionWithRequest;
     private _passReqToCallback: boolean;
 
-    constructor(options: StrategyOptions<false>, verify: VerifyCallback);
-    constructor(options: StrategyOptions<true>, verify: VerifyCallbackWithRequest);
-    constructor(options: StrategyOptions, verify: VerifyCallback | VerifyCallbackWithRequest) {
+    constructor(options: StrategyOptions<false>, verify: VerifyFunction);
+    constructor(options: StrategyOptions<true>, verify: VerifyFunctionWithRequest);
+    constructor(options: StrategyOptions, verify: VerifyFunction | VerifyFunctionWithRequest) {
         super();
 
         this.name = 'cas';
@@ -126,9 +126,9 @@ export class Strategy extends passport.Strategy {
         }
     }
 
-    private verify(req: express.Request, profile: string | Profile): Promise<DoneUserInfo> {
-        return new Promise<DoneUserInfo>((resolve, reject) => {
-            const verified = (err: any, user?: DoneUser, info?: DoneInfo) => {
+    private verify(req: express.Request, profile: string | Profile): Promise<VerifyUserInfo> {
+        return new Promise<VerifyUserInfo>((resolve, reject) => {
+            const verified = (err: any, user?: VerifyUser, info?: VerifyInfo) => {
                 if (err) {
                     reject(err);
                     return;
@@ -136,9 +136,9 @@ export class Strategy extends passport.Strategy {
                 resolve({ user: user || false, info });
             };
             if (this._passReqToCallback) {
-                (this._verify as VerifyCallbackWithRequest)(req, profile, verified);
+                (this._verify as VerifyFunctionWithRequest)(req, profile, verified);
             } else {
-                (this._verify as VerifyCallback)(profile, verified);
+                (this._verify as VerifyFunction)(profile, verified);
             }
         });
     }
@@ -317,7 +317,7 @@ export class Strategy extends passport.Strategy {
             return;
         }
 
-        let userInfo: DoneUserInfo;
+        let userInfo: VerifyUserInfo;
         try {
             userInfo = await this.verify(req, profileInfo.profile);
         } catch (err: unknown) {
