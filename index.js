@@ -1,13 +1,4 @@
 "use strict";
-var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
-    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
-    return new (P || (P = Promise))(function (resolve, reject) {
-        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
-        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
-        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
-        step((generator = generator.apply(thisArg, _arguments || [])).next());
-    });
-};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.Strategy = void 0;
 /**
@@ -52,49 +43,43 @@ class Strategy extends passport.Strategy {
             }
         });
     }
-    validateCAS1(req, result) {
-        return __awaiter(this, void 0, void 0, function* () {
-            if (result.length < 2 || result[0] !== 'yes' || result[1] === '') {
-                return { profile: false, info: 'Authentication failed' };
-            }
-            return { profile: result[1] };
-        });
+    async validateCAS1(req, result) {
+        if (result.length < 2 || result[0] !== 'yes' || result[1] === '') {
+            return { profile: false, info: 'Authentication failed' };
+        }
+        return { profile: result[1] };
     }
     ;
-    validateSAML(req, result) {
-        return __awaiter(this, void 0, void 0, function* () {
-            const response = result.envelope.body.response;
-            const success = response.status.statuscode['$'].Value.match(/Success$/);
-            if (!success) {
-                return { profile: false, info: 'Authentication failed' };
+    async validateSAML(req, result) {
+        const response = result.envelope.body.response;
+        const success = response.status.statuscode['$'].Value.match(/Success$/);
+        if (!success) {
+            return { profile: false, info: 'Authentication failed' };
+        }
+        const attributes = {};
+        if (Array.isArray(response.assertion.attributestatement.attribute)) {
+            for (const attribute of response.assertion.attributestatement.attribute) {
+                attributes[attribute['$'].AttributeName.toLowerCase()] = attribute.attributevalue;
             }
-            const attributes = {};
-            if (Array.isArray(response.assertion.attributestatement.attribute)) {
-                for (const attribute of response.assertion.attributestatement.attribute) {
-                    attributes[attribute['$'].AttributeName.toLowerCase()] = attribute.attributevalue;
-                }
-                ;
-            }
-            const profile = {
-                'user': response.assertion.authenticationstatement.subject.nameidentifier,
-                'attributes': attributes
-            };
-            return { profile };
-        });
+            ;
+        }
+        const profile = {
+            'user': response.assertion.authenticationstatement.subject.nameidentifier,
+            'attributes': attributes
+        };
+        return { profile };
     }
-    validateCAS23(req, result) {
-        return __awaiter(this, void 0, void 0, function* () {
-            const failure = result.serviceresponse.authenticationfailure;
-            if (failure) {
-                const code = failure.$ && failure.$.code;
-                return { profile: false, info: `Authentication failed: Reason: ${code || 'UNKNOWN'}` };
-            }
-            const profile = result.serviceresponse.authenticationsuccess;
-            if (!profile) {
-                return { profile: false, info: 'Authentication failed: Missing profile' };
-            }
-            return { profile };
-        });
+    async validateCAS23(req, result) {
+        const failure = result.serviceresponse.authenticationfailure;
+        if (failure) {
+            const code = failure.$ && failure.$.code;
+            return { profile: false, info: `Authentication failed: Reason: ${code || 'UNKNOWN'}` };
+        }
+        const profile = result.serviceresponse.authenticationsuccess;
+        if (!profile) {
+            return { profile: false, info: 'Authentication failed: Missing profile' };
+        }
+        return { profile };
     }
     service(req) {
         const serviceURL = this.serviceURL || req.originalUrl;
@@ -104,7 +89,7 @@ class Strategy extends passport.Strategy {
     }
     ;
     authenticate(req, options) {
-        Promise.resolve().then(() => __awaiter(this, void 0, void 0, function* () {
+        Promise.resolve().then(async () => {
             options = options || {};
             // CAS Logout flow as described in
             // https://wiki.jasig.org/display/CAS/Proposal%3A+Front-Channel+Single+Sign-Out var relayState = req.query.RelayState;
@@ -143,7 +128,7 @@ class Strategy extends passport.Strategy {
                 const soapEnvelope = `<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/"><SOAP-ENV:Header/><SOAP-ENV:Body><samlp:Request xmlns:samlp="urn:oasis:names:tc:SAML:1.0:protocol" MajorVersion="1" MinorVersion="1" RequestID="${uuid_1.v4()}" IssueInstant="${new Date().toISOString()}"><samlp:AssertionArtifact>${ticket}</samlp:AssertionArtifact></samlp:Request></SOAP-ENV:Body></SOAP-ENV:Envelope>`;
                 const validateURL = new url.URL(this.validateURL || './samlValidate', this.casBaseURL).toString();
                 try {
-                    const response = yield this._client.post(validateURL, soapEnvelope, {
+                    const response = await this._client.post(validateURL, soapEnvelope, {
                         params: {
                             TARGET: service,
                         },
@@ -154,7 +139,7 @@ class Strategy extends passport.Strategy {
                         },
                         responseType: 'text',
                     });
-                    const result = yield xml2js.parseStringPromise(response.data, {
+                    const result = await xml2js.parseStringPromise(response.data, {
                         'trim': true,
                         'normalize': true,
                         'explicitArray': false,
@@ -163,7 +148,7 @@ class Strategy extends passport.Strategy {
                             xml2js.processors.stripPrefix
                         ]
                     });
-                    profileInfo = yield this.validateSAML(req, result);
+                    profileInfo = await this.validateSAML(req, result);
                 }
                 catch (err) {
                     this.fail(String(err), 500);
@@ -185,7 +170,7 @@ class Strategy extends passport.Strategy {
                         break;
                 }
                 try {
-                    const response = yield this._client.get(validateURL, {
+                    const response = await this._client.get(validateURL, {
                         params: {
                             ticket: ticket,
                             service: service,
@@ -200,12 +185,12 @@ class Strategy extends passport.Strategy {
                         default:
                         case 'CAS1.0': {
                             const result = response.data.split('\n').map((s) => s.trim());
-                            profileInfo = yield this.validateCAS1(req, result);
+                            profileInfo = await this.validateCAS1(req, result);
                             break;
                         }
                         case 'CAS2.0':
                         case 'CAS3.0': {
-                            const result = yield xml2js.parseStringPromise(response.data, {
+                            const result = await xml2js.parseStringPromise(response.data, {
                                 'trim': true,
                                 'normalize': true,
                                 'explicitArray': false,
@@ -214,7 +199,7 @@ class Strategy extends passport.Strategy {
                                     xml2js.processors.stripPrefix
                                 ]
                             });
-                            profileInfo = yield this.validateCAS23(req, result);
+                            profileInfo = await this.validateCAS23(req, result);
                             break;
                         }
                     }
@@ -230,7 +215,7 @@ class Strategy extends passport.Strategy {
             }
             let userInfo;
             try {
-                userInfo = yield this.verify(req, profileInfo.profile);
+                userInfo = await this.verify(req, profileInfo.profile);
             }
             catch (err) {
                 this.error(err);
@@ -253,7 +238,7 @@ class Strategy extends passport.Strategy {
                 return;
             }
             this.success(userInfo.user, userInfo.info);
-        }))
+        })
             .catch((err) => {
             this.error(err);
             return;

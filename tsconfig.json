@@ -3,7 +3,7 @@
         "declaration": true,
         "module": "CommonJS",
         "strict": true,
-        "target": "ES6",
+        "target": "ES2017",
         "outDir": "."
     },
     "exclude": [
