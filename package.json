@@ -22,17 +22,17 @@
   },
   "homepage": "https://github.com/dylan171/passport-apereo-cas",
   "dependencies": {
-    "axios": "^0.19.2",
-    "uuid": "^7.0.3",
+    "axios": "^0.20.0",
+    "uuid": "^8.3.0",
     "xml2js": "^0.4.19"
   },
   "peerDependencies": {
     "passport": "^0.4.0"
   },
   "devDependencies": {
-    "@types/passport": "^1.0.3",
-    "@types/uuid": "^7.0.2",
+    "@types/passport": "^1.0.4",
+    "@types/uuid": "^8.3.0",
     "@types/xml2js": "^0.4.5",
-    "typescript": "^3.8.3"
+    "typescript": "^4.0.2"
   }
 }

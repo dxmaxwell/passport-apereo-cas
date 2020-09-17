@@ -241,7 +241,7 @@ export class Strategy extends passport.Strategy {
         // CAS Logout flow as described in
         // https://wiki.jasig.org/display/CAS/Proposal%3A+Front-Channel+Single+Sign-Out var relayState = req.query.RelayState;
         const relayState = req.query.RelayState;
-        if (relayState) {
+        if (typeof relayState === 'string' && relayState) {
             // logout locally
             req.logout();
             const redirectURL = new url.URL('./logout', this.casBaseURL)
