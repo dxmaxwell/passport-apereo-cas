@@ -31,6 +31,8 @@ export interface Profile {
     attributes?: { [key: string]: any };
 }
 
+type ValidateProfileInfo = { profile: false | string | Profile, info?: string };
+
 type DoneUser = object | false;
 type DoneInfo = { message?: string } | string;
 export type DoneUserInfo = { user: DoneUser; info?: DoneInfo };
@@ -100,8 +102,6 @@ export class Strategy extends passport.Strategy {
 
     private _client: axios.AxiosInstance;
     private _verify: VerifyCallback | VerifyCallbackWithRequest;
-    private _validate: (req: express.Request, body: string, verified: DoneCallback) => void;
-    private _validateUri: string;
     private _passReqToCallback: boolean;
 
     constructor(options: StrategyOptions<false>, verify: VerifyCallback);
@@ -121,51 +121,41 @@ export class Strategy extends passport.Strategy {
         this._client = axios.default.create(options.agentOptions);
         this._passReqToCallback = options.passReqToCallback || false;
 
-        const xmlParseOpts: xml2js.Options = {
-            'trim': true,
-            'normalize': true,
-            'explicitArray': false,
-            'tagNameProcessors': [
-                xml2js.processors.normalize,
-                xml2js.processors.stripPrefix
-            ]
-        };
+        if (![ 'CAS1.0', 'CAS2.0', 'CAS3.0'].includes(this.version)) {
+            throw new Error(`Unsupported CAS protocol version: ${this.version}`);
+        }
+    }
 
-        switch (this.version) {
-            case 'CAS1.0':
-                this._validateUri = './validate';
-                this._validate = (req, body, verified) => {
-                    const lines = body.split('\n');
-                    if (lines.length >= 1) {
-                        if (lines[0] === 'no') {
-                            verified(new Error('Authentication failed'));
-                            return;
-                        } else if (lines[0] === 'yes' && lines.length >= 2) {
-                            if (this._passReqToCallback) {
-                                (this._verify as VerifyCallbackWithRequest)(req, lines[1], verified);
-                            } else {
-                                (this._verify as VerifyCallback)(lines[1], verified);
-                            }
-                            return;
-                        }
-                    }
-                    verified(new Error('The response from the server was bad'));
-                    return
-                };
-                break;
-            case 'CAS2.0':
-            case 'CAS3.0':
-                if (this.useSaml) {
-                    this._validateUri = './samlValidate';
-                    this._validate = (req, body, verified) => {
-                        xml2js.parseString(body, xmlParseOpts, (err, result: SAMLValidateResult) => {
-                            if (err) {
-                                return verified(new Error('The response from the server was bad'));
-                            }
-                            try {
+    private verify(req: express.Request, profile: string | Profile): Promise<DoneUserInfo> {
+        return new Promise<DoneUserInfo>((resolve, reject) => {
+            const verified = (err: any, user?: DoneUser, info?: DoneInfo) => {
+                if (err) {
+                    reject(err);
+                    return;
+                }
+                resolve({ user: user || false, info });
+            };
+            if (this._passReqToCallback) {
+                (this._verify as VerifyCallbackWithRequest)(req, profile, verified);
+            } else {
+                (this._verify as VerifyCallback)(profile, verified);
+            }
+        });
+    }
+
+    private async validateCAS1(req: express.Request, result: string[]): Promise<ValidateProfileInfo> {
+        if (result.length < 2 || result[0] !== 'yes' || result[1].trim() === '') {
+            return { profile: false, info: 'Authentication failed' };
+        }
+        return { profile: result[1].trim() };
+    };
+
+    private async validateSAML(req: express.Request, result: SAMLValidateResult): Promise<ValidateProfileInfo> {
                                 const response = result.envelope.body.response;
                                 const success = response.status.statuscode['$'].Value.match(/Success$/);
-                                if (success) {
+                                if (!success) {
+                                    return { profile: false, info: 'Authentication failed' };
+                                }
                                     const attributes: { [key: string]: object } = {};
                                     if (Array.isArray(response.assertion.attributestatement.attribute)) {
                                         for (const attribute of response.assertion.attributestatement.attribute) {
@@ -176,75 +166,20 @@ export class Strategy extends passport.Strategy {
                                         'user': response.assertion.authenticationstatement.subject.nameidentifier,
                                         'attributes': attributes
                                     };
-                                    if (this._passReqToCallback) {
-                                        (this._verify as VerifyCallbackWithRequest)(req, profile, verified);
-                                    } else {
-                                        (this._verify as VerifyCallback)(profile, verified);
-                                    }
-                                    return;
-                                }
-                                verified(new Error('Authentication failed'));
-                                return;
-                            } catch (e) {
-                                verified(new Error('Authentication failed'));
-                                return;
-                            }
-                        });
-                    };
-                } else {
-                    if (this.version === 'CAS2.0') {
-                        this._validateUri = './serviceValidate';
-                    } else {
-                        this._validateUri = './p3/serviceValidate';
-                    }
-                    this._validate = (req, body, verified) => {
-                        xml2js.parseString(body, xmlParseOpts, (err, result: CASValidateResult) => {
-                            if (err) {
-                                return verified(new Error('The response from the server was bad'));
-                            }
-                            try {
-                                if (result.serviceresponse.authenticationfailure) {
-                                    return verified(new Error('Authentication failed ' + result.serviceresponse.authenticationfailure.$.code));
-                                }
-                                const success = result.serviceresponse.authenticationsuccess;
-                                if (success) {
-                                    if (this._passReqToCallback) {
-                                        (this._verify as VerifyCallbackWithRequest)(req, success, verified);
-                                    } else {
-                                        (this._verify as VerifyCallback)(success, verified);
-                                    }
-                                    return;
-                                }
-                                verified(new Error('Authentication failed'));
-                                return;
-
-                            } catch (e) {
-                                verified(new Error('Authentication failed'));
-                                return;
-                            }
-                        });
-                    };
-                }
-                break;
-            default:
-                throw new Error('unsupported version ' + this.version);
+                                return { profile };
+    }
+ 
+    private async validateCAS23(req: express.Request, result: CASValidateResult): Promise<ValidateProfileInfo> {
+        const failure = result.serviceresponse.authenticationfailure;
+        if (failure) {
+            const code = failure.$ && failure.$.code;
+            return { profile: false, info: `Authentication failed: Reason: ${code || 'UNKNOWN'}` };
         }
-    }
-
-    private validateCAS(req: express.Request, body: string): Promise<DoneUserInfo> {
-        return new Promise<DoneUserInfo>((resolve, reject) => {
-            this._validate(req, body, (err: any, user, info) => {
-                if (err) {
-                    reject(err);
-                    return;
-                }
-                resolve({ user: user || false, info });
-            });
-        });
-    }
-
-    private validateSAML(req: express.Request, body: string): Promise<DoneUserInfo> {
-        return this.validateCAS(req, body);
+        const profile = result.serviceresponse.authenticationsuccess;
+        if (!profile) {
+            return { profile: false, info: 'Authentication failed: Missing profile' };
+        }
+        return { profile };
     }
 
     private service(req: express.Request): string {
@@ -294,17 +229,26 @@ export class Strategy extends passport.Strategy {
             return;
         }
 
+        const xmlParseOpts: xml2js.Options = {
+            'trim': true,
+            'normalize': true,
+            'explicitArray': false,
+            'tagNameProcessors': [
+                xml2js.processors.normalize,
+                xml2js.processors.stripPrefix
+            ]
+        };
+
         let _validateUri = this.validateURL;
 
-        let userInfo: DoneUserInfo;
+        let profileInfo: ValidateProfileInfo;
         if (this.useSaml) {
             const soapEnvelope = `<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/"><SOAP-ENV:Header/><SOAP-ENV:Body><samlp:Request xmlns:samlp="urn:oasis:names:tc:SAML:1.0:protocol" MajorVersion="1" MinorVersion="1" RequestID="${uuidv4()}" IssueInstant="${new Date().toISOString()}"><samlp:AssertionArtifact>${ticket}</samlp:AssertionArtifact></samlp:Request></SOAP-ENV:Body></SOAP-ENV:Envelope>`;
             if (!_validateUri) {
                 _validateUri = './samlValidate';
             }
-            let response: axios.AxiosResponse<string>;
             try {
-            response = await this._client.post<string>(new url.URL(_validateUri, this.casBaseURL).toString(), soapEnvelope, {
+            const response = await this._client.post<string>(new url.URL(_validateUri, this.casBaseURL).toString(), soapEnvelope, {
                 params: {
                     TARGET: service,
                 },
@@ -315,14 +259,10 @@ export class Strategy extends passport.Strategy {
                 },
                 responseType: 'text',
             });
+            const result: SAMLValidateResult = await xml2js.parseStringPromise(response.data, xmlParseOpts);
+            profileInfo = await this.validateSAML(req, result);
             } catch (err: unknown) {
                 this.fail(String(err), 500);
-                return;
-            }
-            try {
-                userInfo = await this.validateSAML(req, response.data);
-            } catch (err: unknown) {
-                this.error(err);
                 return;
             }
         } else {
@@ -340,9 +280,8 @@ export class Strategy extends passport.Strategy {
                     break;
                 }
             }
-            let response: axios.AxiosResponse<string>;
             try {
-            response = await this._client.get<string>(new url.URL(_validateUri, this.casBaseURL).toString(), {
+            const response = await this._client.get<string>(new url.URL(_validateUri, this.casBaseURL).toString(), {
                 params: {
                     ticket: ticket,
                     service: service,
@@ -353,16 +292,37 @@ export class Strategy extends passport.Strategy {
                 },
                 responseType: 'text',
             });
+            switch (this.version) {
+                default:
+                case 'CAS1.0': {
+                    const result = response.data.split('\n');
+                    profileInfo = await this.validateCAS1(req, result);
+                    break;
+                }
+                case 'CAS2.0':
+                case 'CAS3.0': {
+                    const result: CASValidateResult = await xml2js.parseStringPromise(response.data, xmlParseOpts);
+                    profileInfo = await this.validateCAS23(req, result);
+                    break;
+                }
+            }
             } catch (err: unknown) {
                 this.fail(String(err), 500);
                 return;
             }
-            try {
-                userInfo = await this.validateCAS(req, response.data);
-            } catch (err: unknown) {
-                this.error(err);
-                return;
-            }
+        }
+
+        if (profileInfo.profile === false) {
+            this.fail(profileInfo.info);
+            return;
+        }
+
+        let userInfo: DoneUserInfo;
+        try {
+            userInfo = await this.verify(req, profileInfo.profile);
+        } catch (err: unknown) {
+            this.error(err);
+            return;
         }
 
         // Support `info` of type string, even though it is

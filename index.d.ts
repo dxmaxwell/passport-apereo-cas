@@ -43,13 +43,13 @@ export declare class Strategy extends passport.Strategy {
     useSaml: boolean;
     private _client;
     private _verify;
-    private _validate;
-    private _validateUri;
     private _passReqToCallback;
     constructor(options: StrategyOptions<false>, verify: VerifyCallback);
     constructor(options: StrategyOptions<true>, verify: VerifyCallbackWithRequest);
-    private validateCAS;
+    private verify;
+    private validateCAS1;
     private validateSAML;
+    private validateCAS23;
     private service;
     authenticate(req: express.Request, options?: AuthenticateOptions): void;
 }
