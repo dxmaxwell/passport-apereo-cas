@@ -205,8 +205,8 @@ class Strategy extends passport.Strategy {
                 },
                 responseType: 'text',
             })
-                .then(_handleResponse).catch((e) => {
-                this.fail(String(e));
+                .then(_handleResponse).catch((err) => {
+                this.fail(String(err), 500);
                 return;
             });
         }
@@ -222,8 +222,8 @@ class Strategy extends passport.Strategy {
                 },
                 responseType: 'text',
             })
-                .then(_handleResponse).catch((e) => {
-                this.fail(String(e));
+                .then(_handleResponse).catch((err) => {
+                this.fail(String(err), 500);
                 return;
             });
         }
