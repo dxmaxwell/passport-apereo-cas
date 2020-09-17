@@ -22,7 +22,15 @@ export interface Profile {
         [key: string]: any;
     };
 }
-export declare type DoneCallback = (err: any, user?: any, info?: any) => void;
+declare type DoneUser = object | false;
+declare type DoneInfo = {
+    message?: string;
+} | string;
+export declare type DoneUserInfo = {
+    user: DoneUser;
+    info?: DoneInfo;
+};
+export declare type DoneCallback = (err: any, user?: DoneUser, info?: DoneInfo) => void;
 export declare type VerifyCallback = (profile: string | Profile, done: DoneCallback) => void;
 export declare type VerifyCallbackWithRequest = (req: express.Request, profile: string | Profile, done: DoneCallback) => void;
 export declare class Strategy extends passport.Strategy {
@@ -40,6 +48,9 @@ export declare class Strategy extends passport.Strategy {
     private _passReqToCallback;
     constructor(options: StrategyOptions<false>, verify: VerifyCallback);
     constructor(options: StrategyOptions<true>, verify: VerifyCallbackWithRequest);
+    private validateCAS;
+    private validateSAML;
     private service;
     authenticate(req: express.Request, options?: AuthenticateOptions): void;
 }
+export {};

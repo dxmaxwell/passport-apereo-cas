@@ -31,7 +31,10 @@ export interface Profile {
     attributes?: { [key: string]: any };
 }
 
-export type DoneCallback = (err: any, user?: any, info?: any) => void;
+type DoneUser = object | false;
+type DoneInfo = { message?: string } | string;
+export type DoneUserInfo = { user: DoneUser; info?: DoneInfo };
+export type DoneCallback = (err: any, user?: DoneUser, info?: DoneInfo) => void;
 
 export type VerifyCallback = (profile: string | Profile, done: DoneCallback) => void;
 export type VerifyCallbackWithRequest =  (req: express.Request, profile: string | Profile, done: DoneCallback) => void;
@@ -228,6 +231,22 @@ export class Strategy extends passport.Strategy {
         }
     }
 
+    private validateCAS(req: express.Request, body: string): Promise<DoneUserInfo> {
+        return new Promise<DoneUserInfo>((resolve, reject) => {
+            this._validate(req, body, (err: any, user, info) => {
+                if (err) {
+                    reject(err);
+                    return;
+                }
+                resolve({ user: user || false, info });
+            });
+        });
+    }
+
+    private validateSAML(req: express.Request, body: string): Promise<DoneUserInfo> {
+        return this.validateCAS(req, body);
+    }
+
     private service(req: express.Request): string {
         const serviceURL = this.serviceURL || req.originalUrl;
         const resolvedURL = new url.URL(serviceURL, this.serviceBaseURL);
@@ -236,6 +255,7 @@ export class Strategy extends passport.Strategy {
     };
 
     public authenticate(req: express.Request, options?: AuthenticateOptions) {
+    Promise.resolve().then(async (): Promise<void> => {
         options = options || {};
 
         // CAS Logout flow as described in
@@ -274,26 +294,17 @@ export class Strategy extends passport.Strategy {
             return;
         }
 
-        const verified = (err: any, user?: object, info?: object) => {
-            if (err) {
-                return this.error(err);
-            }
-            if (!user) {
-                return this.fail(String(info));
-            }
-            this.success(user, info);
-        };
-        const _validateUri = this.validateURL || this._validateUri;
+        let _validateUri = this.validateURL;
 
-        const _handleResponse = (response: axios.AxiosResponse<string>) => {
-            this._validate(req, response.data, verified);
-            return;
-        };
-
+        let userInfo: DoneUserInfo;
         if (this.useSaml) {
             const soapEnvelope = `<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/"><SOAP-ENV:Header/><SOAP-ENV:Body><samlp:Request xmlns:samlp="urn:oasis:names:tc:SAML:1.0:protocol" MajorVersion="1" MinorVersion="1" RequestID="${uuidv4()}" IssueInstant="${new Date().toISOString()}"><samlp:AssertionArtifact>${ticket}</samlp:AssertionArtifact></samlp:Request></SOAP-ENV:Body></SOAP-ENV:Envelope>`;
-
-            this._client.post<string>(new url.URL(_validateUri, this.casBaseURL).toString(), soapEnvelope, {
+            if (!_validateUri) {
+                _validateUri = './samlValidate';
+            }
+            let response: axios.AxiosResponse<string>;
+            try {
+            response = await this._client.post<string>(new url.URL(_validateUri, this.casBaseURL).toString(), soapEnvelope, {
                 params: {
                     TARGET: service,
                 },
@@ -303,13 +314,35 @@ export class Strategy extends passport.Strategy {
                     'Accept-Charset': 'utf-8',
                 },
                 responseType: 'text',
-            })
-            .then(_handleResponse).catch((err: any) => {
+            });
+            } catch (err: unknown) {
                 this.fail(String(err), 500);
                 return;
-            });
+            }
+            try {
+                userInfo = await this.validateSAML(req, response.data);
+            } catch (err: unknown) {
+                this.error(err);
+                return;
+            }
         } else {
-            this._client.get<string>(new url.URL(_validateUri, this.casBaseURL).toString(), {
+            if (!_validateUri) {
+                switch (this.version) {
+                default:
+                case 'CAS1.0':
+                    _validateUri = './validate';
+                    break;
+                case 'CAS2.0':
+                    _validateUri = './serviceValidate';
+                    break;
+                case 'CAS3.0':
+                    _validateUri = './p3/serviceValidate';
+                    break;
+                }
+            }
+            let response: axios.AxiosResponse<string>;
+            try {
+            response = await this._client.get<string>(new url.URL(_validateUri, this.casBaseURL).toString(), {
                 params: {
                     ticket: ticket,
                     service: service,
@@ -319,11 +352,38 @@ export class Strategy extends passport.Strategy {
                     'Accept-Charset': 'utf-8',
                 },
                 responseType: 'text',
-            })
-            .then(_handleResponse).catch((err: any) => {
+            });
+            } catch (err: unknown) {
                 this.fail(String(err), 500);
                 return;
-            });
+            }
+            try {
+                userInfo = await this.validateCAS(req, response.data);
+            } catch (err: unknown) {
+                this.error(err);
+                return;
+            }
         }
+
+        // Support `info` of type string, even though it is
+        // not supported by the passport type definitions.
+        // Recommend use of an object like `{ message: 'Failed' }`
+        if (!userInfo.user) {
+            const info = userInfo.info;
+            if (typeof info === 'string') {
+                this.fail(info);
+            } else if (!info || !info.message) {
+                this.fail();
+            } else {
+                this.fail(info.message);
+            }
+            return;
+        }
+        this.success(userInfo.user, userInfo.info as (object | undefined));
+    })
+    .catch((err: any) => {
+        this.error(err);
+        return;
+    });
     };
 }

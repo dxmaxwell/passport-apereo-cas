@@ -1,5 +1,15 @@
 "use strict";
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.Strategy = void 0;
 /**
  * Apereo CAS Protocol Client (https://apereo.github.io/cas/6.1.x/protocol/CAS-Protocol.html)
  */
@@ -137,6 +147,20 @@ class Strategy extends passport.Strategy {
                 throw new Error('unsupported version ' + this.version);
         }
     }
+    validateCAS(req, body) {
+        return new Promise((resolve, reject) => {
+            this._validate(req, body, (err, user, info) => {
+                if (err) {
+                    reject(err);
+                    return;
+                }
+                resolve({ user: user || false, info });
+            });
+        });
+    }
+    validateSAML(req, body) {
+        return this.validateCAS(req, body);
+    }
     service(req) {
         const serviceURL = this.serviceURL || req.originalUrl;
         const resolvedURL = new url.URL(serviceURL, this.serviceBaseURL);
@@ -145,88 +169,136 @@ class Strategy extends passport.Strategy {
     }
     ;
     authenticate(req, options) {
-        options = options || {};
-        // CAS Logout flow as described in
-        // https://wiki.jasig.org/display/CAS/Proposal%3A+Front-Channel+Single+Sign-Out var relayState = req.query.RelayState;
-        const relayState = req.query.RelayState;
-        if (relayState) {
-            // logout locally
-            req.logout();
-            const redirectURL = new url.URL('./logout', this.casBaseURL);
-            redirectURL.searchParams.append('_eventId', 'next');
-            redirectURL.searchParams.append('RelayState', relayState);
-            this.redirect(redirectURL.toString());
-            return;
-        }
-        const service = this.service(req);
-        const ticket = req.query.ticket;
-        if (!ticket) {
-            const redirectURL = new url.URL('./login', this.casBaseURL);
-            redirectURL.searchParams.append('service', service);
-            // copy loginParams in login query
-            const loginParams = options.loginParams;
-            if (loginParams) {
-                for (const loginParamKey in loginParams) {
-                    if (loginParams.hasOwnProperty(loginParamKey)) {
-                        const loginParamValue = loginParams[loginParamKey];
-                        if (loginParamValue) {
-                            redirectURL.searchParams.append(loginParamValue, loginParamValue);
+        Promise.resolve().then(() => __awaiter(this, void 0, void 0, function* () {
+            options = options || {};
+            // CAS Logout flow as described in
+            // https://wiki.jasig.org/display/CAS/Proposal%3A+Front-Channel+Single+Sign-Out var relayState = req.query.RelayState;
+            const relayState = req.query.RelayState;
+            if (typeof relayState === 'string' && relayState) {
+                // logout locally
+                req.logout();
+                const redirectURL = new url.URL('./logout', this.casBaseURL);
+                redirectURL.searchParams.append('_eventId', 'next');
+                redirectURL.searchParams.append('RelayState', relayState);
+                this.redirect(redirectURL.toString());
+                return;
+            }
+            const service = this.service(req);
+            const ticket = req.query.ticket;
+            if (!ticket) {
+                const redirectURL = new url.URL('./login', this.casBaseURL);
+                redirectURL.searchParams.append('service', service);
+                // copy loginParams in login query
+                const loginParams = options.loginParams;
+                if (loginParams) {
+                    for (const loginParamKey in loginParams) {
+                        if (loginParams.hasOwnProperty(loginParamKey)) {
+                            const loginParamValue = loginParams[loginParamKey];
+                            if (loginParamValue) {
+                                redirectURL.searchParams.append(loginParamValue, loginParamValue);
+                            }
                         }
                     }
                 }
-            }
-            this.redirect(redirectURL.toString());
-            return;
-        }
-        const verified = (err, user, info) => {
-            if (err) {
-                return this.error(err);
-            }
-            if (!user) {
-                return this.fail(String(info));
-            }
-            this.success(user, info);
-        };
-        const _validateUri = this.validateURL || this._validateUri;
-        const _handleResponse = (response) => {
-            this._validate(req, response.data, verified);
-            return;
-        };
-        if (this.useSaml) {
-            const soapEnvelope = `<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/"><SOAP-ENV:Header/><SOAP-ENV:Body><samlp:Request xmlns:samlp="urn:oasis:names:tc:SAML:1.0:protocol" MajorVersion="1" MinorVersion="1" RequestID="${uuid_1.v4()}" IssueInstant="${new Date().toISOString()}"><samlp:AssertionArtifact>${ticket}</samlp:AssertionArtifact></samlp:Request></SOAP-ENV:Body></SOAP-ENV:Envelope>`;
-            this._client.post(new url.URL(_validateUri, this.casBaseURL).toString(), soapEnvelope, {
-                params: {
-                    TARGET: service,
-                },
-                headers: {
-                    'Content-Type': 'application/xml',
-                    'Accept': 'application/xml',
-                    'Accept-Charset': 'utf-8',
-                },
-                responseType: 'text',
-            })
-                .then(_handleResponse).catch((err) => {
-                this.fail(String(err), 500);
+                this.redirect(redirectURL.toString());
                 return;
-            });
-        }
-        else {
-            this._client.get(new url.URL(_validateUri, this.casBaseURL).toString(), {
-                params: {
-                    ticket: ticket,
-                    service: service,
-                },
-                headers: {
-                    'Accept': 'application/xml',
-                    'Accept-Charset': 'utf-8',
-                },
-                responseType: 'text',
-            })
-                .then(_handleResponse).catch((err) => {
-                this.fail(String(err), 500);
+            }
+            let _validateUri = this.validateURL;
+            let userInfo;
+            if (this.useSaml) {
+                const soapEnvelope = `<SOAP-ENV:Envelope xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/"><SOAP-ENV:Header/><SOAP-ENV:Body><samlp:Request xmlns:samlp="urn:oasis:names:tc:SAML:1.0:protocol" MajorVersion="1" MinorVersion="1" RequestID="${uuid_1.v4()}" IssueInstant="${new Date().toISOString()}"><samlp:AssertionArtifact>${ticket}</samlp:AssertionArtifact></samlp:Request></SOAP-ENV:Body></SOAP-ENV:Envelope>`;
+                if (!_validateUri) {
+                    _validateUri = './samlValidate';
+                }
+                let response;
+                try {
+                    response = yield this._client.post(new url.URL(_validateUri, this.casBaseURL).toString(), soapEnvelope, {
+                        params: {
+                            TARGET: service,
+                        },
+                        headers: {
+                            'Content-Type': 'application/xml',
+                            'Accept': 'application/xml',
+                            'Accept-Charset': 'utf-8',
+                        },
+                        responseType: 'text',
+                    });
+                }
+                catch (err) {
+                    this.fail(String(err), 500);
+                    return;
+                }
+                try {
+                    userInfo = yield this.validateSAML(req, response.data);
+                }
+                catch (err) {
+                    this.error(err);
+                    return;
+                }
+            }
+            else {
+                if (!_validateUri) {
+                    switch (this.version) {
+                        default:
+                        case 'CAS1.0':
+                            _validateUri = './validate';
+                            break;
+                        case 'CAS2.0':
+                            _validateUri = './serviceValidate';
+                            break;
+                        case 'CAS3.0':
+                            _validateUri = './p3/serviceValidate';
+                            break;
+                    }
+                }
+                let response;
+                try {
+                    response = yield this._client.get(new url.URL(_validateUri, this.casBaseURL).toString(), {
+                        params: {
+                            ticket: ticket,
+                            service: service,
+                        },
+                        headers: {
+                            'Accept': 'application/xml',
+                            'Accept-Charset': 'utf-8',
+                        },
+                        responseType: 'text',
+                    });
+                }
+                catch (err) {
+                    this.fail(String(err), 500);
+                    return;
+                }
+                try {
+                    userInfo = yield this.validateCAS(req, response.data);
+                }
+                catch (err) {
+                    this.error(err);
+                    return;
+                }
+            }
+            // Support `info` of type string, even though it is
+            // not supported by the passport type definitions.
+            // Recommend use of an object like `{ message: 'Failed' }`
+            if (!userInfo.user) {
+                const info = userInfo.info;
+                if (typeof info === 'string') {
+                    this.fail(info);
+                }
+                else if (!info || !info.message) {
+                    this.fail();
+                }
+                else {
+                    this.fail(info.message);
+                }
                 return;
-            });
-        }
+            }
+            this.success(userInfo.user, userInfo.info);
+        }))
+            .catch((err) => {
+            this.error(err);
+            return;
+        });
     }
     ;
 }
