@@ -3,6 +3,8 @@
  */
 import * as url from 'url';
 
+import { HttpsProxyAgent } from 'https-proxy-agent';
+
 import * as axios from 'axios';
 import * as express from 'express';
 import * as passport from 'passport';
@@ -118,8 +120,20 @@ export class Strategy extends passport.Strategy {
         this.useSaml = options.useSaml || false;
 
         this._verify = verify;
-        this._client = axios.default.create(options.agentOptions);
         this._passReqToCallback = options.passReqToCallback || false;
+
+        // Work around for the 'borked' Axios HTTPS proxy support!
+        // https://stackoverflow.com/questions/43240483/how-to-use-axios-to-make-an-https-call
+        const httpsProxy = process.env.https_proxy || process.env.HTTPS_PROXY
+                            || process.env.all_proxy || process.env.ALL_PROXY;
+        if (this.casBaseURL.startsWith('https:') && httpsProxy) {
+            this._client = axios.default.create({
+                httpsAgent: new HttpsProxyAgent(httpsProxy),
+                proxy: false,
+            });
+        } else {
+            this._client = axios.default.create();
+        }
 
         if (![ 'CAS1.0', 'CAS2.0', 'CAS3.0'].includes(this.version)) {
             throw new Error(`Unsupported CAS protocol version: ${this.version}`);
