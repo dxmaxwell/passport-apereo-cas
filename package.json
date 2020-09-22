@@ -25,7 +25,7 @@
     "axios": "^0.20.0",
     "https-proxy-agent": "^5.0.0",
     "uuid": "^8.3.0",
-    "xml2js": "^0.4.19"
+    "xml2js": "^0.4.23"
   },
   "peerDependencies": {
     "passport": "^0.4.0"
@@ -34,6 +34,6 @@
     "@types/passport": "^1.0.4",
     "@types/uuid": "^8.3.0",
     "@types/xml2js": "^0.4.5",
-    "typescript": "^4.0.2"
+    "typescript": "^4.0.3"
   }
 }
