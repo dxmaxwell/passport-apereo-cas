@@ -1,6 +1,6 @@
 {
   "name": "passport-apereo-cas",
-  "version": "0.3.0-beta.3-DEV",
+  "version": "0.3.0-beta.3",
   "description": "Apereo CAS authentication strategies for Passport.",
   "main": "index.js",
   "scripts": {
