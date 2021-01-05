@@ -22,7 +22,7 @@
   },
   "homepage": "https://github.com/dylan171/passport-apereo-cas",
   "dependencies": {
-    "axios": "^0.20.0",
+    "axios": "^0.21.1",
     "https-proxy-agent": "^5.0.0",
     "uuid": "^8.3.0",
     "xml2js": "^0.4.23"
